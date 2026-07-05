@@ -53,6 +53,7 @@ class ScrapeRequest(BaseModel):
 
 
 @app.get("/")
+@app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
 
