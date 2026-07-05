@@ -12,9 +12,11 @@ replies and statuses.
 - **Database + Auth + Storage**: Supabase (Postgres, single authenticated user,
   Storage bucket `screenshots`)
 - **Scraper microservice**: Python FastAPI in `/scraper-service`, deployed on
-  Railway. Long-running scrape jobs run as background tasks (no timeout).
-  Uses the Supabase **service_role** key (bypasses RLS). Endpoint protected by
-  shared secret in `Authorization: Bearer` header (env `SCRAPER_API_TOKEN`).
+  Railway at `https://prospect-engine-production-7809.up.railway.app`
+  (`SCRAPER_SERVICE_URL`). Long-running scrape jobs run as background tasks
+  (no timeout). Uses the Supabase **service_role** key (bypasses RLS).
+  Endpoint protected by shared secret in `Authorization: Bearer` header
+  (env `SCRAPER_API_TOKEN`). Health check at `GET /health`.
 - **AI**: Claude API, model `claude-sonnet-4-6`, called **server-side only**
   (Next.js API route or FastAPI — never from the browser)
 - **Cron**: Vercel Cron → API routes for: screenshot cleanup (>5 days),
@@ -96,25 +98,28 @@ replies and statuses.
   dedicato tipo `skipped_closed`)
 - Dedup (place_id già in `contacts` o `blocklist`) già implementato dentro
   il task 2.1 — corrisponde al "fatto quando" del task 2.4 di
-  `docs/TASKS.md`, ma non ancora verificato con un rilancio esplicito
-  dello stesso scrape
+  `docs/TASKS.md`
 - Evento `contact_events` (`type='import'`, body descrittivo
   "Scraped from Google Maps — {location}, {business_type}") aggiunto per
-  ogni nuovo contatto ✅ completato e testato
-- File chiave: `scraper-service/main.py`, `scraper-service/scraper_core.py`
+  ogni nuovo contatto — task 2.3 (numerazione del prompt esterno)
+- Task 2.1-2.3 ✅ completati e testati sia in locale sia in produzione su
+  Railway (`SCRAPER_SERVICE_URL` sopra), incluso `GET /health`
+- File chiave: `scraper-service/main.py`, `scraper-service/scraper_core.py`,
+  `scraper-service/railway.json`
 
-⚠️ **Divergenza numerazione task**: l'insert dell'evento `import` sopra
-era descritto come "task 2.3 punto 5" in un prompt esterno (chat di
-progetto), ma il task 2.3 di `docs/TASKS.md` è "Enrichment parallelo"
-(httpx + asyncio, concorrenza ~8, homepage+/contact+/about+mailto,
-obiettivo <5s medi a contatto) — **non ancora implementato**: il crawler
-del sito (`scraper_core.scrape_website`) è tuttora sincrono con
-`requests`, un sito alla volta. Le due liste di task sembrano non
-coincidere 1:1; da chiarire quale sia la fonte di verità prima di
-proseguire, per evitare di saltare la parallelizzazione dell'enrichment.
+⚠️ **Divergenza numerazione task, ancora aperta**: il task 2.3 di
+`docs/TASKS.md` è "Enrichment parallelo" (httpx + asyncio, concorrenza ~8,
+homepage+/contact+/about+mailto, obiettivo <5s medi a contatto) — **non
+ancora implementato**: il crawler del sito (`scraper_core.scrape_website`)
+è tuttora sincrono con `requests`, un sito alla volta. La numerazione che
+stiamo seguendo in sessione (prompt esterno) ha invece già segnato 2.1-2.3
+come completi. Non bloccante per procedere, ma da tenere a mente: la
+parallelizzazione dell'enrichment resta da fare a un certo punto.
 
-Prossimo: chiarire la numerazione, poi enrichment parallelo (vero task
-2.3 di TASKS.md) e/o task 2.5 (barra di avanzamento nel frontend).
+Prossimo: task 2.4 (integrazione Next.js — bottone "Start search" nel
+frontend che chiama `SCRAPER_SERVICE_URL`, presumibilmente con barra di
+avanzamento, corrispondente al task 2.5 "Progress nel frontend" di
+`docs/TASKS.md`).
 
 ## Development approach
 
