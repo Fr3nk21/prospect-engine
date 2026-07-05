@@ -1,0 +1,115 @@
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { CategoryTag, Rating } from '@/components/contact-badges'
+import StatusSelect from '@/components/status-select'
+import NoteForm from '@/components/note-form'
+import Timeline from '@/components/timeline'
+import { instagramUrl, type ContactDetail, type ContactEvent } from '@/lib/contacts'
+import { updateContactStatus, addNote } from './actions'
+
+export const dynamic = 'force-dynamic'
+
+export default async function ContactDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const supabase = await createClient()
+
+  const [{ data: contact }, { data: events }] = await Promise.all([
+    supabase
+      .from('contacts')
+      .select(
+        'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, status, last_contact_date, source'
+      )
+      .eq('id', id)
+      .single(),
+    supabase
+      .from('contact_events')
+      .select('*')
+      .eq('contact_id', id)
+      .order('created_at', { ascending: false }),
+  ])
+
+  if (!contact) notFound()
+
+  const c = contact as ContactDetail
+
+  return (
+    <div className="page">
+      <Link className="back" href="/contacts">
+        ← All contacts
+      </Link>
+
+      <header className="detail-head">
+        <div>
+          <h1>{c.name}</h1>
+          <div className="detail-meta">
+            {c.address && <span>{c.address}</span>}
+            {c.website && (
+              <a href={c.website} target="_blank" rel="noreferrer">
+                {c.website}
+              </a>
+            )}
+            {c.instagram && (
+              <a className="mono" href={instagramUrl(c.instagram)} target="_blank" rel="noreferrer">
+                {c.instagram}
+              </a>
+            )}
+            {c.phone && <span>{c.phone}</span>}
+            {c.email && <span>{c.email}</span>}
+          </div>
+        </div>
+        <div className="detail-badges">
+          <CategoryTag value={c.category} />
+          <Rating value={c.rating} reviews={c.review_count} />
+        </div>
+      </header>
+
+      <div className="detail-grid">
+        <div className="col-main">
+          <section className="panel">
+            <div className="eyebrow">History</div>
+            <NoteForm contactId={c.id} addNote={addNote} />
+            <Timeline events={(events ?? []) as ContactEvent[]} />
+          </section>
+        </div>
+
+        <aside className="col-side">
+          <section className="panel">
+            <div className="eyebrow">Contact status</div>
+            <StatusSelect contactId={c.id} status={c.status} updateStatus={updateContactStatus} />
+            <p className="hint dim">
+              Changing the status records the date automatically and adds an entry to the history
+              below.
+            </p>
+          </section>
+
+          <section className="panel">
+            <div className="eyebrow">Details</div>
+            <dl className="detail-facts">
+              <div>
+                <dt className="dim">Type</dt>
+                <dd>{c.business_type ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="dim">Suburb</dt>
+                <dd>{c.suburb ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="dim">Source</dt>
+                <dd>{c.source}</dd>
+              </div>
+              <div>
+                <dt className="dim">Last contact</dt>
+                <dd>{c.last_contact_date ?? '—'}</dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
+      </div>
+    </div>
+  )
+}

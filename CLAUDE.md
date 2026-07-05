@@ -90,7 +90,12 @@ npm run build          # production build check
 cd scraper-service && uvicorn main:app --reload   # FastAPI locally
 ```
 
-## Modulo attuale — Modulo 1
+## Modulo attuale — Modulo 2 (Scraper come servizio)
+
+Modulo 1 completato (1.1-1.4) — vedi sezione sotto per i dettagli.
+Prossimo: 2.1, FastAPI su Railway.
+
+## Modulo 1 — CRM funzionante coi dati esistenti ✅ COMPLETATO
 
 ### Task 1.1 — Scaffold Next.js + Auth ✅ COMPLETATO E TESTATO
 - Next.js 15 (App Router, TypeScript) scaffoldato nella root del repo
@@ -100,28 +105,48 @@ cd scraper-service && uvicorn main:app --reload   # FastAPI locally
 - File chiave: `middleware.ts`, `lib/supabase/server.ts`, `lib/supabase/client.ts`,
   `components/topbar.tsx`, `app/login/page.tsx`, `app/globals.css`
 
-### Task 1.2 — Import Google Sheet 🔄 IN CORSO
-**Infrastruttura pronta:**
+### Task 1.2 — Import Google Sheet ✅ COMPLETATO
 - Service account Google: `sheets-reader@prospect-engine-501213.iam.gserviceaccount.com`
-- Chiave: `scraper-service/prospect-engine-501213-01c1baacedda.json`
-  (in `scraper-service/.gitignore`, mai committata)
-- Foglio "Melbourne Venues" condiviso come Viewer con il service account
+  (chiave in `scraper-service/google-service-account.json`, mai committata)
+- Foglio "Melbourne Venues" (ID in `SPREADSHEET_ID`, `.env`), letto via
+  `open_by_key` (niente Drive API, solo Sheets API — evita di dover abilitare
+  permessi extra sul progetto GCP)
+- Il foglio ha 7 tab (uno per sobborgo). 3 hanno una riga di intestazione
+  regolare (Moonee Ponds, Malvern, Prahran → lette per nome colonna); 4 non
+  ne hanno (Richmond, Abbotsford, Hawthorn, Northcote → mappate per
+  posizione, ordine colonne diverso tra Richmond e gli altri tre — vedi
+  `POSITIONAL_WORKSHEETS` in `import_sheet.py`)
+- Script: `scraper-service/import_sheet.py --dry-run` / senza flag per
+  scrivere. Dedup su (name, address) contro righe già `source=sheet_import`.
+- Import eseguito: 1469 righe lette, 1083 inserite, 105 duplicati, 281
+  scartate (tab Prahran, `Categoria` non compilata per la maggior parte
+  delle righe — lasciate fuori, da valorizzare a mano sul foglio se si
+  vorranno re-importare in futuro)
+- Note libere trovate come `Stato Contatto` nel tab Richmond mappate così:
+  `Qualcuno li segue` / `Email inesistente` → `To contact`,
+  `Troppo Grande` → `Not interested`
+- Nota nota: righe da sheet import con status `Not interested` NON vengono
+  aggiunte a `blocklist` (niente `place_id` disponibile) — solo
+  `contacts.status` è impostato
 
-**Punto di stop:** mappatura colonne foglio→DB mostrata e confermata da Francesco;
-lo script `scraper-service/import_sheet.py` NON è ancora stato scritto.
+### Task 1.3 — Lista contatti ✅ COMPLETATO E TESTATO
+- Tabella su dati reali: filtri (ricerca nome, categoria, stato, tipo,
+  intervallo date ultimo contatto), ordinamento per colonna, paginazione,
+  toggle tema chiaro/scuro
+- File chiave: `app/(protected)/contacts/page.tsx`, `lib/contacts.ts`,
+  `components/contacts-filter-bar.tsx`, `components/contact-row.tsx`,
+  `components/contact-badges.tsx`, `components/page-size-select.tsx`
 
-**Mappatura approvata (sheet → contacts):**
-`Venue`→`name`, `Indirizzo`→`address`, `Area`→`suburb`, `Telefono`→`phone`,
-`Sito Web`→`website`, `Email`→`email`, `Instagram`→`instagram`,
-`Rating`→`rating`, `N° Recensioni`→`review_count`, `Tipo Attività`→`business_type`,
-`Categoria`→`category` (Alta/Media/Bassa → High/Medium/Low),
-`Stato Contatto`→`status` (vedi mappatura sotto), `Data Contatto`→`last_contact_date`;
-skip: `Qualità Instagram`, `DM Instagram`, `Email Bozza`, `Aggiornato`.
-Stati: vuoto/`Da contattare`→`To contact`, `Contattato`→`Contacted`,
-`Contattato ma non risposto`→`No reply`, `In conversazione`→`In conversation`,
-`Contattato e non interessato`→`Not interested` (+ insert in blocklist).
-`place_id`=NULL per tutti, `source`=`sheet_import`.
-
-**Prossimo passo:** scrivere `scraper-service/import_sheet.py` con
-`--dry-run`, riepilogo (lette/inserite/scartate), inserimento in `blocklist`
-per i Not interested.
+### Task 1.4 — Dettaglio contatto (base) ✅ COMPLETATO E TESTATO
+- Pagina dettaglio: dati business, cambio stato (select client-side +
+  server action; il trigger DB logga da solo in `contact_events` e setta
+  `last_contact_date`), note manuali, cronologia da `contact_events`
+- Stato `Not interested` → server action inserisce anche in `blocklist`
+  (solo se il contatto ha `place_id`; sheet import/manual senza place_id
+  restano fuori, come da nota sopra)
+- Link Instagram cliccabile: `instagramUrl()` in `lib/contacts.ts` gestisce
+  sia URL completi salvati sia semplici username (costruisce
+  `instagram.com/<handle>`)
+- File chiave: `app/(protected)/contacts/[id]/page.tsx`,
+  `app/(protected)/contacts/[id]/actions.ts`, `components/status-select.tsx`,
+  `components/note-form.tsx`, `components/timeline.tsx`

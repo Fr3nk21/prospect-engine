@@ -161,6 +161,7 @@ textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
 .btn-ghost:hover:not(:disabled) { border-color: var(--accent); }
 .btn-ghost:disabled { opacity: .4; cursor: default; }
 .btn-ghost.small { padding: 6px 12px; font-size: 12.5px; }
+.btn-ghost.disabled { opacity: .4; cursor: default; pointer-events: none; }
 
 /* ---------- Scrape section ---------- */
 .scrape-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 14px; align-items: end; }
@@ -222,6 +223,7 @@ table.contacts { width: 100%; border-collapse: collapse; }
 }
 .contacts th.sortable { cursor: pointer; }
 .contacts th.sortable:hover { color: var(--text); }
+.contacts th.sortable a { color: inherit; text-decoration: none; display: block; }
 .contacts th.right { text-align: right; }
 .contacts td { padding: 13px 12px; border-bottom: 1px solid var(--line-soft); }
 .contacts tbody tr { cursor: pointer; transition: background .12s; }
@@ -290,6 +292,11 @@ table.contacts { width: 100%; border-collapse: collapse; }
 .detail-badges { display: flex; align-items: center; gap: 14px; }
 
 .detail-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+
+.detail-facts { display: flex; flex-direction: column; gap: 10px; }
+.detail-facts div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.detail-facts dt { font-weight: 400; }
+.detail-facts dd { text-align: right; }
 
 /* ---------- History / timeline ---------- */
 .nota-add { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
