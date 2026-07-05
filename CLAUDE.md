@@ -52,8 +52,13 @@ replies and statuses.
 ## Domain rules
 
 - Statuses: `To contact` → `Contacted` → `No reply` / `In conversation` / `Not interested`
-- Categories: `High` (rating ≥ 4.5 AND reviews > 200 AND has website),
+- Categories (v2 — website is NOT a factor; category measures prospect value,
+  contactability is separate data): `High` (rating ≥ 4.5 AND reviews > 200),
   `Medium` (4.0 ≤ rating < 4.5 OR 100 ≤ reviews ≤ 200), else `Low`
+- `is_new_venue` flag (orthogonal to category): rating ≥ 4.5 AND
+  10 ≤ reviews ≤ 100 → likely recently opened, prime prospect. Shown as
+  badge/filter in the UI, never merged into category (kept separate so
+  reply-rate analysis can validate it later)
 - Setting status to `Not interested` must also insert the contact's `place_id`
   into `blocklist` (app code, not trigger — needs the place_id check)
 - Max 10 Instagram screenshots per analysis
@@ -75,6 +80,42 @@ replies and statuses.
 - All Claude API calls include max_tokens and parse JSON defensively
   (strip markdown fences, validate fields)
 
+## Modulo attuale — Modulo 2 (Scraper come servizio)
+
+- Task 2.1 (FastAPI su Railway) ✅ completato e testato: `POST /scrape`
+  (bearer token) crea la riga in `scrape_jobs` e lancia il lavoro in
+  background; `GET /scrape/{job_id}` per controllare l'avanzamento.
+- Task 2.2 (Places API New + field mask) ✅ completato e testato: Text
+  Search e Place Details via `httpx` diretto su `places.googleapis.com/v1`
+  (la legacy `googlemaps` non è abilitata sul progetto GCP — solo
+  "Places API (New)", da Modulo 0). Field mask minimale (`places.id`) in
+  fase di ricerca; field mask completo richiesto solo per i candidati che
+  superano il filtro duplicati/blocklist. Filtro `businessStatus`: i
+  locali non `OPERATIONAL` vengono scartati (contati in `skipped`, ma
+  senza riga in `scrape_job_items` — lo schema non ha ancora uno status
+  dedicato tipo `skipped_closed`)
+- Dedup (place_id già in `contacts` o `blocklist`) già implementato dentro
+  il task 2.1 — corrisponde al "fatto quando" del task 2.4 di
+  `docs/TASKS.md`, ma non ancora verificato con un rilancio esplicito
+  dello stesso scrape
+- Evento `contact_events` (`type='import'`, body descrittivo
+  "Scraped from Google Maps — {location}, {business_type}") aggiunto per
+  ogni nuovo contatto ✅ completato e testato
+- File chiave: `scraper-service/main.py`, `scraper-service/scraper_core.py`
+
+⚠️ **Divergenza numerazione task**: l'insert dell'evento `import` sopra
+era descritto come "task 2.3 punto 5" in un prompt esterno (chat di
+progetto), ma il task 2.3 di `docs/TASKS.md` è "Enrichment parallelo"
+(httpx + asyncio, concorrenza ~8, homepage+/contact+/about+mailto,
+obiettivo <5s medi a contatto) — **non ancora implementato**: il crawler
+del sito (`scraper_core.scrape_website`) è tuttora sincrono con
+`requests`, un sito alla volta. Le due liste di task sembrano non
+coincidere 1:1; da chiarire quale sia la fonte di verità prima di
+proseguire, per evitare di saltare la parallelizzazione dell'enrichment.
+
+Prossimo: chiarire la numerazione, poi enrichment parallelo (vero task
+2.3 di TASKS.md) e/o task 2.5 (barra di avanzamento nel frontend).
+
 ## Development approach
 
 Work module by module, end-to-end, testing before moving on (see /docs/TASKS.md).
@@ -89,64 +130,3 @@ npm run dev            # Next.js locally
 npm run build          # production build check
 cd scraper-service && uvicorn main:app --reload   # FastAPI locally
 ```
-
-## Modulo attuale — Modulo 2 (Scraper come servizio)
-
-Modulo 1 completato (1.1-1.4) — vedi sezione sotto per i dettagli.
-Prossimo: 2.1, FastAPI su Railway.
-
-## Modulo 1 — CRM funzionante coi dati esistenti ✅ COMPLETATO
-
-### Task 1.1 — Scaffold Next.js + Auth ✅ COMPLETATO E TESTATO
-- Next.js 15 (App Router, TypeScript) scaffoldato nella root del repo
-- Supabase Auth con `@supabase/ssr`: login (email+password), logout, middleware
-- Route protette: redirect → /login se non autenticato; redirect → /contacts se già loggato
-- Toggle tema chiaro/scuro (CSS variables, preferenza in localStorage)
-- File chiave: `middleware.ts`, `lib/supabase/server.ts`, `lib/supabase/client.ts`,
-  `components/topbar.tsx`, `app/login/page.tsx`, `app/globals.css`
-
-### Task 1.2 — Import Google Sheet ✅ COMPLETATO
-- Service account Google: `sheets-reader@prospect-engine-501213.iam.gserviceaccount.com`
-  (chiave in `scraper-service/google-service-account.json`, mai committata)
-- Foglio "Melbourne Venues" (ID in `SPREADSHEET_ID`, `.env`), letto via
-  `open_by_key` (niente Drive API, solo Sheets API — evita di dover abilitare
-  permessi extra sul progetto GCP)
-- Il foglio ha 7 tab (uno per sobborgo). 3 hanno una riga di intestazione
-  regolare (Moonee Ponds, Malvern, Prahran → lette per nome colonna); 4 non
-  ne hanno (Richmond, Abbotsford, Hawthorn, Northcote → mappate per
-  posizione, ordine colonne diverso tra Richmond e gli altri tre — vedi
-  `POSITIONAL_WORKSHEETS` in `import_sheet.py`)
-- Script: `scraper-service/import_sheet.py --dry-run` / senza flag per
-  scrivere. Dedup su (name, address) contro righe già `source=sheet_import`.
-- Import eseguito: 1469 righe lette, 1083 inserite, 105 duplicati, 281
-  scartate (tab Prahran, `Categoria` non compilata per la maggior parte
-  delle righe — lasciate fuori, da valorizzare a mano sul foglio se si
-  vorranno re-importare in futuro)
-- Note libere trovate come `Stato Contatto` nel tab Richmond mappate così:
-  `Qualcuno li segue` / `Email inesistente` → `To contact`,
-  `Troppo Grande` → `Not interested`
-- Nota nota: righe da sheet import con status `Not interested` NON vengono
-  aggiunte a `blocklist` (niente `place_id` disponibile) — solo
-  `contacts.status` è impostato
-
-### Task 1.3 — Lista contatti ✅ COMPLETATO E TESTATO
-- Tabella su dati reali: filtri (ricerca nome, categoria, stato, tipo,
-  intervallo date ultimo contatto), ordinamento per colonna, paginazione,
-  toggle tema chiaro/scuro
-- File chiave: `app/(protected)/contacts/page.tsx`, `lib/contacts.ts`,
-  `components/contacts-filter-bar.tsx`, `components/contact-row.tsx`,
-  `components/contact-badges.tsx`, `components/page-size-select.tsx`
-
-### Task 1.4 — Dettaglio contatto (base) ✅ COMPLETATO E TESTATO
-- Pagina dettaglio: dati business, cambio stato (select client-side +
-  server action; il trigger DB logga da solo in `contact_events` e setta
-  `last_contact_date`), note manuali, cronologia da `contact_events`
-- Stato `Not interested` → server action inserisce anche in `blocklist`
-  (solo se il contatto ha `place_id`; sheet import/manual senza place_id
-  restano fuori, come da nota sopra)
-- Link Instagram cliccabile: `instagramUrl()` in `lib/contacts.ts` gestisce
-  sia URL completi salvati sia semplici username (costruisce
-  `instagram.com/<handle>`)
-- File chiave: `app/(protected)/contacts/[id]/page.tsx`,
-  `app/(protected)/contacts/[id]/actions.ts`, `components/status-select.tsx`,
-  `components/note-form.tsx`, `components/timeline.tsx`

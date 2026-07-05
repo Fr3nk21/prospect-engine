@@ -19,6 +19,7 @@ create table contacts (
   review_count      integer,
   category          text not null default 'Low'
                     check (category in ('High','Medium','Low')),
+  is_new_venue      boolean not null default false,   -- rating >= 4.5 and 10-100 reviews; orthogonal to category
   status            text not null default 'To contact'
                     check (status in ('To contact','Contacted','No reply','In conversation','Not interested')),
   last_contact_date date,
@@ -45,6 +46,7 @@ create index idx_contacts_category      on contacts (category);
 create index idx_contacts_last_contact  on contacts (last_contact_date);
 create index idx_contacts_business_type on contacts (business_type);
 create index idx_contacts_suburb        on contacts (suburb);
+create index idx_contacts_new_venue     on contacts (is_new_venue) where is_new_venue = true;
 
 -- ---------- CONTACT EVENTS (audit trail / history) ----------
 create table contact_events (
