@@ -31,6 +31,14 @@ export function StatusDot({ value }: { value: string }) {
   )
 }
 
+export function NewVenueBadge() {
+  return (
+    <span className="cat-tag new-venue-tag" style={{ color: '#5D9BD6', borderColor: '#5D9BD655', background: '#5D9BD61A' }}>
+      New venue
+    </span>
+  )
+}
+
 export function Rating({ value, reviews }: { value: number | null; reviews: number | null }) {
   if (value == null) return <span className="mono rating dim">—</span>
   return (

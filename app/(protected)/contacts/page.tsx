@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import ContactsFilterBar from '@/components/contacts-filter-bar'
 import PageSizeSelect from '@/components/page-size-select'
 import ContactRow from '@/components/contact-row'
+import ScrapePanel from '@/components/scrape-panel'
 import { PAGE_SIZES, SORT_COLUMNS, type ContactListItem, type SortColumn } from '@/lib/contacts'
 
 export const dynamic = 'force-dynamic'
@@ -36,7 +37,7 @@ export default async function ContactsPage({
   let query = supabase
     .from('contacts')
     .select(
-      'id, name, suburb, business_type, rating, review_count, category, status, last_contact_date',
+      'id, name, suburb, business_type, rating, review_count, category, is_new_venue, status, last_contact_date',
       { count: 'exact' }
     )
 
@@ -92,6 +93,8 @@ export default async function ContactsPage({
 
   return (
     <div className="page">
+      <ScrapePanel />
+
       <section className="panel list-panel">
         <div className="list-head">
           <div>

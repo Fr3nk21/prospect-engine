@@ -82,44 +82,66 @@ replies and statuses.
 - All Claude API calls include max_tokens and parse JSON defensively
   (strip markdown fences, validate fields)
 
-## Modulo attuale — Modulo 2 (Scraper come servizio)
+## Modulo 2 (Scraper come servizio) — ✅ completato e testato in produzione
 
-- Task 2.1 (FastAPI su Railway) ✅ completato e testato: `POST /scrape`
-  (bearer token) crea la riga in `scrape_jobs` e lancia il lavoro in
-  background; `GET /scrape/{job_id}` per controllare l'avanzamento.
-- Task 2.2 (Places API New + field mask) ✅ completato e testato: Text
-  Search e Place Details via `httpx` diretto su `places.googleapis.com/v1`
-  (la legacy `googlemaps` non è abilitata sul progetto GCP — solo
-  "Places API (New)", da Modulo 0). Field mask minimale (`places.id`) in
-  fase di ricerca; field mask completo richiesto solo per i candidati che
-  superano il filtro duplicati/blocklist. Filtro `businessStatus`: i
-  locali non `OPERATIONAL` vengono scartati (contati in `skipped`, ma
-  senza riga in `scrape_job_items` — lo schema non ha ancora uno status
-  dedicato tipo `skipped_closed`)
-- Dedup (place_id già in `contacts` o `blocklist`) già implementato dentro
-  il task 2.1 — corrisponde al "fatto quando" del task 2.4 di
-  `docs/TASKS.md`
-- Evento `contact_events` (`type='import'`, body descrittivo
-  "Scraped from Google Maps — {location}, {business_type}") aggiunto per
-  ogni nuovo contatto — task 2.3 (numerazione del prompt esterno)
-- Task 2.1-2.3 ✅ completati e testati sia in locale sia in produzione su
-  Railway (`SCRAPER_SERVICE_URL` sopra), incluso `GET /health`
+- Task 2.1 (FastAPI su Railway): `POST /scrape` (bearer token) crea la riga
+  in `scrape_jobs` e lancia il lavoro in background; `GET /scrape/{job_id}`
+  per controllare l'avanzamento. Deploy documentato in `docs/deploy.md`
+  (root directory, env vars, comandi curl di test).
+- Task 2.2 (Places API New + field mask): Text Search e Place Details via
+  `httpx` diretto su `places.googleapis.com/v1` (la legacy `googlemaps` non
+  è abilitata sul progetto GCP — solo "Places API (New)", da Modulo 0).
+  Field mask minimale (`places.id`) in fase di ricerca; field mask completo
+  richiesto solo per i candidati che superano il filtro duplicati/blocklist.
+  Filtro `businessStatus`: i locali non `OPERATIONAL` vengono scartati
+  (contati in `skipped`, ma senza riga in `scrape_job_items` — lo schema non
+  ha ancora uno status dedicato tipo `skipped_closed`)
+- Dedup e blocklist (place_id già in `contacts` o `blocklist`) implementato
+  dentro `run_scrape_job` — corrisponde al task 2.4 di `docs/TASKS.md`.
+  Evento `contact_events` (`type='import'`) aggiunto per ogni nuovo
+  contatto.
+- Task 2.5 di `docs/TASKS.md` (Progress nel frontend) ✅ completato e
+  testato: pannello "New search" (`components/scrape-panel.tsx`) chiama
+  `app/api/scrape/route.ts` (proxy server-side verso `SCRAPER_SERVICE_URL`,
+  token mai esposto al browser), che risponde con `job_id`; barra di
+  avanzamento e contatori via Supabase Realtime (`postgres_changes` UPDATE
+  su `scrape_jobs`, filtrata per `id`). Richiede `replica identity full` +
+  tabella in `supabase_realtime` (`db/migration_003_realtime_scrape_jobs.sql`,
+  eseguita). A fine job la lista contatti si aggiorna da sola
+  (`router.refresh()`). Badge "New venue" (`is_new_venue`) visibile in
+  lista e dettaglio contatto.
+  - Nota tecnica: il client Realtime deve propagare esplicitamente il JWT
+    (`supabase.realtime.setAuth(session.access_token)`) prima di
+    sottoscrivere — altrimenti il socket si connette come `anon` e le RLS
+    `to authenticated` bloccano silenziosamente ogni evento (nessun errore
+    in console, semplicemente zero eventi ricevuti).
 - File chiave: `scraper-service/main.py`, `scraper-service/scraper_core.py`,
-  `scraper-service/railway.json`
+  `scraper-service/railway.json`, `app/api/scrape/route.ts`,
+  `components/scrape-panel.tsx`.
 
-⚠️ **Divergenza numerazione task, ancora aperta**: il task 2.3 di
-`docs/TASKS.md` è "Enrichment parallelo" (httpx + asyncio, concorrenza ~8,
-homepage+/contact+/about+mailto, obiettivo <5s medi a contatto) — **non
-ancora implementato**: il crawler del sito (`scraper_core.scrape_website`)
-è tuttora sincrono con `requests`, un sito alla volta. La numerazione che
-stiamo seguendo in sessione (prompt esterno) ha invece già segnato 2.1-2.3
-come completi. Non bloccante per procedere, ma da tenere a mente: la
-parallelizzazione dell'enrichment resta da fare a un certo punto.
+⚠️ **Debito tecnico noto, non bloccante**: il task 2.3 di `docs/TASKS.md`
+("Enrichment parallelo", httpx + asyncio concorrenza ~8) **non è
+implementato** — `scraper_core.scrape_website` è tuttora sincrono con
+`requests`, un sito alla volta, con delay casuali di 2–5s tra i fetch
+(homepage + fino a 3 link "contact" trovati + fino a 10 path standard tipo
+`/contact`, `/about`, ecc.).
 
-Prossimo: task 2.4 (integrazione Next.js — bottone "Start search" nel
-frontend che chiama `SCRAPER_SERVICE_URL`, presumibilmente con barra di
-avanzamento, corrispondente al task 2.5 "Progress nel frontend" di
-`docs/TASKS.md`).
+Impatto pratico stimato (in base al target dichiarato nello stesso task —
+"200 contatti in ~15 minuti invece di 90" — quindi ~27s/contatto in
+sincrono contro ~4.5s/contatto in parallelo a concorrenza 8):
+
+| Risultati scrape | Sincrono (attuale) | Parallelo (concorrenza 8, da fare) |
+|---|---|---|
+| 50  | ~20–25 min | ~4 min |
+| 100 | ~40–45 min | ~7–8 min |
+
+Sotto i ~30-40 risultati per ricerca la differenza è tollerabile per un
+uso manuale (avvii lo scrape e fai altro). Da risolvere prima di lanciare
+scrape ricorrenti su aree grandi (100+ risultati attesi) o se si vuole
+incolonnare più ricerche in sequenza.
+
+Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
+`docs/TASKS.md`.
 
 ## Development approach
 

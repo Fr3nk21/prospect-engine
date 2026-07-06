@@ -166,6 +166,19 @@ textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
 /* ---------- Scrape section ---------- */
 .scrape-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 14px; align-items: end; }
 .scrape-result { margin-top: 12px; color: var(--ok); }
+.scrape-stats { margin-top: 8px; font-size: 12.5px; }
+
+.progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-up);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width .4s ease;
+}
 
 /* ---------- Spinner / rec dot ---------- */
 .rec-dot {

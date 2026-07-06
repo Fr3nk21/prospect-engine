@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { CategoryTag, StatusDot, Rating } from '@/components/contact-badges'
+import { CategoryTag, NewVenueBadge, StatusDot, Rating } from '@/components/contact-badges'
 import type { ContactListItem } from '@/lib/contacts'
 
 export default function ContactRow({ contact }: { contact: ContactListItem }) {
@@ -18,6 +18,7 @@ export default function ContactRow({ contact }: { contact: ContactListItem }) {
       </td>
       <td>
         <CategoryTag value={contact.category} />
+        {contact.is_new_venue && <NewVenueBadge />}
       </td>
       <td className="right">
         <Rating value={contact.rating} reviews={contact.review_count} />

@@ -28,6 +28,7 @@ export type ContactListItem = {
   rating: number | null
   review_count: number | null
   category: string
+  is_new_venue: boolean
   status: string
   last_contact_date: string | null
 }
@@ -46,9 +47,24 @@ export type ContactDetail = {
   rating: number | null
   review_count: number | null
   category: string
+  is_new_venue: boolean
   status: string
   last_contact_date: string | null
   source: string
+}
+
+export type ScrapeJob = {
+  id: string
+  location: string
+  business_type: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  total: number | null
+  processed: number
+  new_contacts: number
+  skipped: number
+  error: string | null
+  started_at: string | null
+  finished_at: string | null
 }
 
 export type ContactEvent = {

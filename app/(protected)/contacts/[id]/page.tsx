@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { CategoryTag, Rating } from '@/components/contact-badges'
+import { CategoryTag, NewVenueBadge, Rating } from '@/components/contact-badges'
 import StatusSelect from '@/components/status-select'
 import NoteForm from '@/components/note-form'
 import Timeline from '@/components/timeline'
@@ -22,7 +22,7 @@ export default async function ContactDetailPage({
     supabase
       .from('contacts')
       .select(
-        'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, status, last_contact_date, source'
+        'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, source'
       )
       .eq('id', id)
       .single(),
@@ -64,6 +64,7 @@ export default async function ContactDetailPage({
         </div>
         <div className="detail-badges">
           <CategoryTag value={c.category} />
+          {c.is_new_venue && <NewVenueBadge />}
           <Rating value={c.rating} reviews={c.review_count} />
         </div>
       </header>

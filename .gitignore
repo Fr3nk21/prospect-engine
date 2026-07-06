@@ -25,3 +25,4 @@ scraper-service/*.egg-info/
 # Editor
 .vscode/
 .idea/
+tsconfig.tsbuildinfo
