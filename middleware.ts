@@ -31,8 +31,9 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const isLoginPage = request.nextUrl.pathname === '/login'
+  const isTestTimeoutRoute = request.nextUrl.pathname === '/api/test-timeout'
 
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isTestTimeoutRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
