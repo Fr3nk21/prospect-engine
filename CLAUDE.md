@@ -145,9 +145,14 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
 
 ## Modulo 3 (Analisi Claude e generazione email) — 🚧 in corso
 
-- Task 3.1 (upload screenshot) **implementato, build ok, non ancora
-  testato in locale né in produzione, non ancora committato prima
-  dell'ultimo commit di questa sessione**. File: `components/screenshot-
+- Task 3.1 (upload screenshot) **✅ completato e testato in locale**
+  (drag&drop + click, limite 5MB, resize client-side, limite 10
+  screenshot, rimozione singola verificata anche lato Storage,
+  persistenza al reload). Bug risolto durante il test: in
+  `resizeIfNeeded` (`screenshot-upload.tsx`), `bitmap.close()` veniva
+  chiamato prima di `ctx.drawImage(bitmap, ...)`, causando un
+  `ImageBitmap` detached e un errore silenzioso lato client (nessuna
+  richiesta arrivava mai alla Server Action). File: `components/screenshot-
   upload.tsx` (drag&drop + click, resize client-side via canvas se il
   lato lungo supera 2000px, rifiuto file >5MB, contatore n/10, rimozione
   singola), `app/(protected)/contacts/[id]/actions.ts`
