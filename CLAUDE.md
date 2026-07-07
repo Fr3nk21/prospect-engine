@@ -143,6 +143,61 @@ incolonnare più ricerche in sequenza.
 Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
 `docs/TASKS.md`.
 
+## Modulo 3 (Analisi Claude e generazione email) — 🚧 in corso
+
+- Task 3.1 (upload screenshot) **implementato, build ok, non ancora
+  testato in locale né in produzione, non ancora committato prima
+  dell'ultimo commit di questa sessione**. File: `components/screenshot-
+  upload.tsx` (drag&drop + click, resize client-side via canvas se il
+  lato lungo supera 2000px, rifiuto file >5MB, contatore n/10, rimozione
+  singola), `app/(protected)/contacts/[id]/actions.ts`
+  (`uploadScreenshot`/`deleteScreenshot`, rollback dello storage se
+  l'insert DB fallisce), `app/(protected)/contacts/[id]/page.tsx` (legge
+  le righe `screenshots` esistenti + genera signed URL per le anteprime,
+  bucket privato). `next.config.ts`: `serverActions.bodySizeLimit`
+  alzato a 6MB per far passare i file nelle Server Action.
+- Task 3.2 (analisi + generazione email): **architettura definita, non
+  ancora implementata**. Decisioni prese:
+  - **Vercel Hobby impone davvero un cap di 60s** (verificato con un test
+    reale: route con `maxDuration=60` e sleep di 65s → 504
+    `FUNCTION_INVOCATION_TIMEOUT` a ~60.9s, nonostante il dashboard
+    mostri 300s di default). Di conseguenza la chiamata a Claude Vision
+    non può girare sincrona su una API route Vercel.
+  - Pattern scelto: **stesso schema asincrono già validato per lo
+    scrape** (Modulo 2.1/2.5) — `app/api/contacts/[id]/analyze/route.ts`
+    diventa un proxy leggero (verifica sessione, poi inoltra a Railway);
+    la logica reale (lettura screenshots, chiamata Claude Vision,
+    parsing, save su `contacts`) gira come nuovo endpoint in
+    `scraper-service/`, che crea una riga di job e risponde subito con un
+    id; il frontend segue l'avanzamento via Supabase Realtime, come
+    `scrape_jobs`. Serve una nuova tabella tipo `analysis_jobs` (non
+    ancora creata).
+  - `ANTHROPIC_API_KEY` va aggiunta alle env var di **Railway**, non di
+    Vercel (la chiamata a Claude gira lato scraper-service).
+  - **Score breakdown**: si mantengono le 6 dimensioni del prompt già
+    validato in `scraper-service/prospect_analyzer.py` (Visual Quality,
+    Content Consistency, Video Presence, Posting Frequency, Engagement
+    Signals, Bio & Profile — scale diverse, totale /100). La dicitura
+    "5 dimensioni 0-20" in `docs/TASKS.md` è imprecisa e va ignorata. La
+    UI deve renderizzare dinamicamente qualunque numero di
+    dimensioni/scale arrivi dal JSON di risposta — niente hardcoded.
+  - **Tono email** (`email_technical` vs `email_warm`): stessa identica
+    filosofia di fondo per entrambe — prima persona, tono onesto e
+    umano, non salesy, dimostra di aver guardato davvero
+    Instagram/sito (cita qualcosa di specifico visto negli screenshot),
+    osservazione onesta su cosa funziona/manca, 1-2 soluzioni concrete
+    legate a video/foto. La differenza è **solo di registro**:
+    `technical` apre più dritto su osservazione+soluzione (adatta a
+    business più strutturati/corporate); `warm` apre con più calore
+    relazionale prima della proposta (adatta a attività piccole/
+    familiari). Evitare in entrambe: linguaggio da agenzia, superlativi
+    vuoti, urgenza artificiale, frasi genériche copiabili su qualunque
+    business. Il SYSTEM_PROMPT esistente genera solo 2 varianti (cold +
+    followup) e va riscritto per produrne 3 (technical/warm/followup).
+  - Tracciabilità di quale variante viene poi usata in un invio reale:
+    già coperta dallo schema esistente (`contact_events.email_variant`),
+    non serve altro codice ora — verrà popolata nel Modulo 4 (invio).
+
 ## Development approach
 
 Work module by module, end-to-end, testing before moving on (see /docs/TASKS.md).

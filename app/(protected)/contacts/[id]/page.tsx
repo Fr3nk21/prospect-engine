@@ -5,8 +5,11 @@ import { CategoryTag, NewVenueBadge, Rating } from '@/components/contact-badges'
 import StatusSelect from '@/components/status-select'
 import NoteForm from '@/components/note-form'
 import Timeline from '@/components/timeline'
-import { instagramUrl, type ContactDetail, type ContactEvent } from '@/lib/contacts'
-import { updateContactStatus, addNote } from './actions'
+import ScreenshotUpload from '@/components/screenshot-upload'
+import { instagramUrl, type ContactDetail, type ContactEvent, type Screenshot } from '@/lib/contacts'
+import { updateContactStatus, addNote, uploadScreenshot, deleteScreenshot } from './actions'
+
+const SIGNED_URL_TTL_SECONDS = 3600
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +21,7 @@ export default async function ContactDetailPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: contact }, { data: events }] = await Promise.all([
+  const [{ data: contact }, { data: events }, { data: screenshotRows }] = await Promise.all([
     supabase
       .from('contacts')
       .select(
@@ -31,11 +34,25 @@ export default async function ContactDetailPage({
       .select('*')
       .eq('contact_id', id)
       .order('created_at', { ascending: false }),
+    supabase
+      .from('screenshots')
+      .select('id, contact_id, storage_path, created_at')
+      .eq('contact_id', id)
+      .order('created_at', { ascending: true }),
   ])
 
   if (!contact) notFound()
 
   const c = contact as ContactDetail
+
+  const screenshots: Screenshot[] = await Promise.all(
+    (screenshotRows ?? []).map(async (row) => {
+      const { data } = await supabase.storage
+        .from('screenshots')
+        .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS)
+      return { ...row, url: data?.signedUrl ?? '' }
+    })
+  )
 
   return (
     <div className="page">
@@ -71,6 +88,16 @@ export default async function ContactDetailPage({
 
       <div className="detail-grid">
         <div className="col-main">
+          <section className="panel">
+            <div className="eyebrow">Instagram screenshots</div>
+            <ScreenshotUpload
+              contactId={c.id}
+              screenshots={screenshots}
+              uploadScreenshot={uploadScreenshot}
+              deleteScreenshot={deleteScreenshot}
+            />
+          </section>
+
           <section className="panel">
             <div className="eyebrow">History</div>
             <NoteForm contactId={c.id} addNote={addNote} />

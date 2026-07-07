@@ -67,6 +67,14 @@ export type ScrapeJob = {
   finished_at: string | null
 }
 
+export type Screenshot = {
+  id: string
+  contact_id: string
+  storage_path: string
+  created_at: string
+  url: string
+}
+
 export type ContactEvent = {
   id: string
   contact_id: string

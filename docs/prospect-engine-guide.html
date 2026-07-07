@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UnFocus Prospect Engine — Guida al funzionamento</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+
+:root{
+  --paper:#F4F4F0; --ink:#1E2126; --ink-dim:#5C6068; --rule:#D8D7D0;
+  --accent:#B57718;
+  /* app dark tokens for the embedded screens */
+  --s-bg:#101216; --s-panel:#171A20; --s-up:#1D2129; --s-line:#262B35;
+  --s-text:#E7E4DD; --s-dim:#9DA3AE; --s-faint:#6B7280; --s-accent:#E5A445;
+  --hi:#5FBF77; --md:#DE9B3B; --lo:#D95F4E; --blue:#6EA8DC;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.65}
+.wrap{max-width:860px;margin:0 auto;padding:56px 32px 96px}
+.mono{font-family:'IBM Plex Mono',monospace}
+
+/* ---------- document typography ---------- */
+h1{font-family:'Archivo',sans-serif;font-weight:800;font-stretch:115%;font-size:44px;line-height:1.05;letter-spacing:-.01em;margin:10px 0 18px}
+h2{font-family:'Archivo',sans-serif;font-weight:700;font-stretch:110%;font-size:24px;margin:0 0 6px}
+h3{font-family:'Archivo',sans-serif;font-weight:600;font-size:16px;margin:26px 0 8px}
+p{margin:0 0 14px;max-width:64ch}
+.lede{font-size:18px;color:var(--ink-dim);max-width:56ch}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+section{margin-top:72px;border-top:1px solid var(--rule);padding-top:28px}
+section .stage{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:10px}
+.caption{font-size:13px;color:var(--ink-dim);margin:10px 0 0;max-width:70ch}
+.caption b{color:var(--ink);font-weight:600}
+kbd,.tag-inline{font-family:'IBM Plex Mono',monospace;font-size:12px;background:#E9E8E2;border:1px solid var(--rule);border-radius:4px;padding:1px 6px}
+ul.doc{padding-left:18px;margin:0 0 14px}
+ul.doc li{margin-bottom:8px;max-width:62ch}
+
+/* ---------- pipeline diagram ---------- */
+.pipeline{display:flex;gap:0;margin:28px 0 6px;flex-wrap:wrap}
+.pipe-step{flex:1;min-width:130px;border:1px solid var(--rule);background:#fff;padding:14px 14px 12px;position:relative}
+.pipe-step+.pipe-step{border-left:none}
+.pipe-step .n{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent)}
+.pipe-step .t{font-weight:600;font-size:13.5px;margin-top:3px}
+.pipe-step .d{font-size:12px;color:var(--ink-dim);margin-top:4px;line-height:1.45}
+/* film-strip perforations: the pipeline is the film that runs through the tool */
+.pipe-step::before,.pipe-step::after{content:"";position:absolute;left:0;right:0;height:6px;
+  background-image:radial-gradient(circle at 6px 3px, var(--paper) 2.4px, transparent 2.5px);
+  background-size:16px 6px;background-repeat:repeat-x}
+.pipe-step::before{top:2px}.pipe-step::after{bottom:2px}
+
+/* ---------- embedded app screens ---------- */
+.screen{background:var(--s-bg);border:1px solid #C9C8C1;border-radius:10px;overflow:hidden;margin:20px 0 4px;color:var(--s-text);font-size:12px;box-shadow:0 12px 32px rgba(30,33,38,.14)}
+.s-top{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--s-panel);border-bottom:1px solid var(--s-line)}
+.s-brand{font-family:'Archivo',sans-serif;font-weight:700;font-stretch:112%;letter-spacing:.05em;font-size:11px;text-transform:uppercase}
+.s-top .mono{font-size:10px;color:var(--s-dim)}
+.s-body{padding:14px 16px 18px}
+.s-panel{background:var(--s-panel);border:1px solid var(--s-line);border-radius:8px;padding:12px 14px;margin-bottom:12px}
+.s-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--s-dim);margin-bottom:8px}
+.s-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.s-field{flex:1;min-width:120px}
+.s-label{font-size:9.5px;color:var(--s-dim);margin-bottom:3px}
+.s-input{background:var(--s-up);border:1px solid var(--s-line);border-radius:5px;padding:6px 8px;font-size:11px;color:var(--s-text)}
+.s-btn{background:var(--s-accent);color:#17130A;font-weight:600;border-radius:5px;padding:7px 14px;font-size:11px;white-space:nowrap}
+.s-btn.ghost{background:none;border:1px solid var(--s-line);color:var(--s-text);font-weight:400}
+.s-table{width:100%;border-collapse:collapse;font-size:11px}
+.s-table th{font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--s-faint);text-align:left;padding:5px 8px;border-bottom:1px solid var(--s-line)}
+.s-table td{padding:8px;border-bottom:1px solid #20242D}
+.s-name{font-weight:600}
+.s-sub{font-size:9.5px;color:var(--s-faint)}
+.cat{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid}
+.cat.hi{color:var(--hi);border-color:#5FBF7755;background:#5FBF771A}
+.cat.md{color:var(--md);border-color:#DE9B3B55;background:#DE9B3B1A}
+.cat.lo{color:var(--lo);border-color:#D95F4E55;background:#D95F4E1A}
+.nv{font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--s-accent);border:1px dashed #E5A44566;border-radius:3px;padding:1px 5px;margin-left:5px}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.s-dim{color:var(--s-dim)}
+.progress{height:8px;background:var(--s-up);border-radius:4px;overflow:hidden;margin:8px 0 6px}
+.progress i{display:block;height:100%;width:62%;background:var(--s-accent);border-radius:4px}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap}
+.thumb{width:46px;height:46px;border-radius:4px;background:linear-gradient(135deg,#2A2F3A,#1D2129);border:1px solid var(--s-line);position:relative}
+.thumb.add{display:flex;align-items:center;justify-content:center;color:var(--s-faint);border-style:dashed;background:none}
+.bars{display:grid;grid-template-columns:110px 1fr 26px;gap:6px 10px;align-items:center;font-size:10px}
+.bars .b{height:7px;background:var(--s-up);border-radius:3px;overflow:hidden}
+.bars .b i{display:block;height:100%;background:var(--s-accent)}
+.s-textarea{background:var(--s-up);border:1px solid var(--s-line);border-radius:5px;padding:8px 10px;font-size:10.5px;line-height:1.55;color:var(--s-text)}
+.pill{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 8px;border-radius:99px;border:1px solid var(--s-line);color:var(--s-dim)}
+.pill.on{color:var(--hi);border-color:#5FBF7755}
+.tl{border-left:2px solid var(--s-line);padding-left:9px;margin-bottom:8px}
+.tl.status{border-left-color:var(--s-accent)}
+.tl .mono{font-size:9px;color:var(--s-dim)}
+.tl p{font-size:10.5px;margin:1px 0 0;max-width:none}
+.grid2{display:grid;grid-template-columns:1fr 235px;gap:12px;align-items:start}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+.cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+@media(max-width:700px){.cards{grid-template-columns:1fr}}
+.card{background:var(--s-up);border:1px solid var(--s-line);border-radius:6px;padding:9px 10px}
+.card .h{font-size:10.5px;font-weight:600;margin-bottom:2px}
+.card .m{font-size:9px;color:var(--s-dim)}
+
+/* ---------- reference blocks ---------- */
+.ref{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+@media(max-width:700px){.ref{grid-template-columns:1fr}}
+.ref-box{background:#fff;border:1px solid var(--rule);padding:16px 18px}
+.ref-box h4{font-family:'Archivo',sans-serif;font-size:13px;font-weight:700;margin:0 0 10px;text-transform:uppercase;letter-spacing:.05em}
+.ref-box ul{list-style:none;padding:0;font-size:13px}
+.ref-box li{padding:5px 0;border-bottom:1px dashed var(--rule)}
+.ref-box li:last-child{border:none}
+.legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:0}
+.footer{margin-top:80px;border-top:1px solid var(--rule);padding-top:18px;font-size:12px;color:var(--ink-dim)}
+@media print{.screen{box-shadow:none;break-inside:avoid}section{break-inside:avoid-page}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">UnFocus · documentazione interna</div>
+  <h1>Prospect Engine</h1>
+  <p class="lede">Un unico strumento che trova le attività giuste a Melbourne, capisce dai loro profili Instagram se hanno bisogno di contenuti video professionali, scrive email di primo contatto personalizzate e tiene traccia di ogni conversazione — dalla ricerca alla risposta.</p>
+
+  <div class="pipeline">
+    <div class="pipe-step"><div class="n">01</div><div class="t">Trova</div><div class="d">Scraping di Google Maps per zona e tipo di attività</div></div>
+    <div class="pipe-step"><div class="n">02</div><div class="t">Arricchisci</div><div class="d">Email e Instagram estratti dal sito web di ogni attività</div></div>
+    <div class="pipe-step"><div class="n">03</div><div class="t">Analizza</div><div class="d">Claude valuta gli screenshot Instagram e assegna un punteggio</div></div>
+    <div class="pipe-step"><div class="n">04</div><div class="t">Contatta</div><div class="d">Email personalizzate inviate da info@unfocus.com.au</div></div>
+    <div class="pipe-step"><div class="n">05</div><div class="t">Traccia</div><div class="d">Risposte rilevate in automatico, storico completo, insight</div></div>
+  </div>
+  <p class="caption">Le cinque fasi del flusso. Ogni fase è utilizzabile da sola: si può usare il CRM senza mai lanciare uno scrape, o generare email senza inviarle dall'app.</p>
+</header>
+
+<!-- ================= DASHBOARD ================= -->
+<section>
+  <div class="stage">Fase 01–02 · Schermata</div>
+  <h2>La lista contatti</h2>
+  <p>È la vista di lavoro principale: tutte le attività raccolte, con categoria di valore, stato del contatto e data dell'ultimo tocco. In alto, il pannello per lanciare una nuova ricerca su Google Maps.</p>
+
+  <div class="screen">
+    <div class="s-top"><span class="s-brand">Prospect Engine</span><span class="mono">Today · Contacts · Insights · Settings</span></div>
+    <div class="s-body">
+      <div class="s-panel">
+        <div class="s-eyebrow">New search</div>
+        <div class="s-row">
+          <div class="s-field"><div class="s-label">Location</div><div class="s-input">Richmond, VIC</div></div>
+          <div class="s-field"><div class="s-label">Business category</div><div class="s-input">Restaurant</div></div>
+          <div class="s-btn">Start search</div>
+        </div>
+      </div>
+      <div class="s-panel">
+        <div class="s-eyebrow">Contacts · 47 of 214 · 31 to contact</div>
+        <div class="s-row" style="margin-bottom:10px">
+          <div class="s-input" style="min-width:120px;color:var(--s-faint)">Search by name…</div>
+          <div class="s-input">Category: all</div>
+          <div class="s-input">Status: all</div>
+          <div class="s-input">Last contact: May 1 → today</div>
+          <div class="pill on">New venue ✓</div>
+        </div>
+        <table class="s-table">
+          <tr><th>Business</th><th>Category</th><th>Rating</th><th>Status</th><th>Last contact</th></tr>
+          <tr>
+            <td><span class="s-name">Gilda Cantina</span><span class="nv">NEW VENUE</span><div class="s-sub">Restaurant · Richmond</div></td>
+            <td><span class="cat hi">High</span></td>
+            <td class="mono">4.8 <span class="s-dim">/ 74</span></td>
+            <td><span class="dot" style="background:#8A919E"></span>To contact</td>
+            <td class="mono s-dim">—</td>
+          </tr>
+          <tr>
+            <td><span class="s-name">Fratellino</span><div class="s-sub">Restaurant · Carlton</div></td>
+            <td><span class="cat hi">High</span></td>
+            <td class="mono">4.6 <span class="s-dim">/ 505</span></td>
+            <td><span class="dot" style="background:#4CAF6E"></span>In conversation</td>
+            <td class="mono s-dim">2026-06-18</td>
+          </tr>
+          <tr>
+            <td><span class="s-name">Hazel Kitchen</span><div class="s-sub">Restaurant · Melbourne CBD</div></td>
+            <td><span class="cat md">Medium</span></td>
+            <td class="mono">4.3 <span class="s-dim">/ 187</span></td>
+            <td><span class="dot" style="background:#DE9B3B"></span>No reply</td>
+            <td class="mono s-dim">2026-05-02</td>
+          </tr>
+        </table>
+        <div class="s-row" style="justify-content:space-between;margin-top:10px">
+          <span class="mono s-dim" style="font-size:9px">Rows per page 10</span>
+          <span class="mono s-dim" style="font-size:9px">← Prev · Page 1 of 5 · Next →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="caption"><b>Da notare:</b> il badge tratteggiato <b>NEW VENUE</b> segnala rating alto con poche recensioni — un locale probabilmente appena aperto, il prospect ideale. I filtri combinano ricerca, categoria, stato, tipo e intervallo di date; le colonne si ordinano cliccando l'intestazione. Tema chiaro/scuro selezionabile.</p>
+
+  <h3>Cosa succede quando premi "Start search"</h3>
+  <p>Lo scraping è un lavoro lungo (minuti, non secondi) e gira su un servizio separato che non ha limiti di tempo. L'app mostra l'avanzamento in tempo reale:</p>
+  <div class="screen">
+    <div class="s-body" style="padding:14px 16px">
+      <div class="s-panel" style="margin:0">
+        <div class="s-eyebrow">Scrape in progress — Richmond, VIC · Restaurant</div>
+        <div class="progress"><i></i></div>
+        <div class="s-row" style="justify-content:space-between">
+          <span class="mono" style="font-size:10px">117 / 189 processed · 12 new · 41 skipped</span>
+          <span class="mono s-dim" style="font-size:10px">~6 min remaining</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="caption"><b>Skipped</b> = attività già in archivio o in blocklist (chi ha detto "non interessato" non riappare mai). Se il servizio si interrompe, il lavoro riprende da dove era arrivato. I duplicati sono impossibili: ogni attività è identificata dal suo ID Google Maps.</p>
+</section>
+
+<!-- ================= DETAIL ================= -->
+<section>
+  <div class="stage">Fase 03 · Schermata</div>
+  <h2>Il dettaglio contatto: analisi e email</h2>
+  <p>Il cuore del tool. Si caricano fino a 10 screenshot del profilo Instagram dell'attività; Claude li analizza come farebbe un consulente marketing e produce un punteggio motivato più tre email pronte — tutte modificabili prima dell'invio.</p>
+
+  <div class="screen">
+    <div class="s-top"><span class="s-brand">Prospect Engine</span><span class="mono">← All contacts</span></div>
+    <div class="s-body">
+      <div class="s-row" style="justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-family:'Archivo';font-weight:700;font-size:16px">Gilda Cantina <span class="nv">NEW VENUE</span></div>
+          <div class="s-sub">402 Bridge Rd, Richmond VIC · gildacantina.com.au · @gilda.cantina</div>
+        </div>
+        <div><span class="cat hi">High</span> <span class="mono" style="font-size:10px">4.8 <span class="s-dim">/ 74</span></span></div>
+      </div>
+      <div class="grid2">
+        <div>
+          <div class="s-panel">
+            <div class="s-eyebrow">Instagram screenshots · 6/10</div>
+            <div class="thumbs">
+              <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+              <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+              <div class="thumb add">+</div>
+            </div>
+            <div class="s-btn" style="margin-top:10px;text-align:center">Generate emails</div>
+          </div>
+          <div class="s-panel">
+            <div class="s-eyebrow">Analysis · priority score 8/10</div>
+            <div class="bars">
+              <span>Visual quality</span><div class="b"><i style="width:55%"></i></div><span class="mono">11</span>
+              <span>Consistency</span><div class="b"><i style="width:40%"></i></div><span class="mono">8</span>
+              <span>Posting freq.</span><div class="b"><i style="width:35%"></i></div><span class="mono">7</span>
+              <span>Professional gap</span><div class="b"><i style="width:90%"></i></div><span class="mono">18</span>
+              <span>Engagement</span><div class="b"><i style="width:70%"></i></div><span class="mono">14</span>
+            </div>
+          </div>
+          <div class="s-panel">
+            <div class="s-eyebrow">Cold email — warm variant <span class="pill" style="margin-left:6px">editable</span></div>
+            <div class="s-textarea">Hey Gilda Cantina,<br><br>I walked past on Saturday night and you could hear the room from the footpath — but that energy never makes it onto your profile. A couple of free observations: the open kitchen deserves a reel, and the service-night stories should live in highlights…<br><br>Cheers, Francesco</div>
+            <div class="s-row" style="margin-top:8px"><div class="s-btn" style="font-size:10px">Send via Gmail</div><div class="s-btn ghost" style="font-size:10px">Save edits</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="s-panel">
+            <div class="s-eyebrow">Contact status</div>
+            <div class="s-input">To contact ▾</div>
+            <div class="s-sub" style="margin-top:6px">Changing the status records the date and logs the change automatically.</div>
+          </div>
+          <div class="s-panel">
+            <div class="s-eyebrow">History</div>
+            <div class="tl status"><span class="mono">⇄ 2026-07-04</span><p>Status changed: To contact → Contacted</p></div>
+            <div class="tl"><span class="mono">✉ 2026-07-04</span><p>Cold email sent (warm variant)</p></div>
+            <div class="tl"><span class="mono">✎ 2026-07-02</span><p>Claude analysis completed — score 8/10</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="caption"><b>Il punteggio è motivato</b>, non una scatola nera: cinque dimensioni da 0 a 20. Qui il segnale forte è il <b>professional gap</b> a 18/20 — grande margine di miglioramento, ottimo prospect. Gli screenshot si eliminano da soli dopo 5 giorni; l'analisi e le email restano per sempre nel contatto. La cronologia a destra si scrive in gran parte da sola: ogni cambio di stato è registrato a livello di database, impossibile da dimenticare.</p>
+</section>
+
+<!-- ================= GMAIL ================= -->
+<section>
+  <div class="stage">Fase 04–05 · Flusso</div>
+  <h2>Invio e tracking automatico</h2>
+  <p>Le email partono dalla vera casella <span class="tag-inline">info@unfocus.com.au</span> via Gmail: finiscono negli Inviati, si può rispondere anche dal telefono, e la reputazione del dominio lavora a favore. Da lì in poi il tool osserva e aggiorna gli stati da solo:</p>
+  <ul class="doc">
+    <li><b>All'invio</b> — lo stato passa a <i>Contacted</i>, la variante usata e il testo esatto vengono salvati nello storico (serviranno per gli insight).</li>
+    <li><b>Ogni ora</b> — un controllo automatico legge i thread Gmail aperti: se il prospect ha risposto, lo stato diventa <i>In conversation</i> senza che tu faccia nulla.</li>
+    <li><b>La follow-up</b> — parte nello stesso thread della prima email, come una conversazione naturale.</li>
+    <li><b>Dopo 6 mesi</b> — chi è rimasto <i>No reply</i> torna automaticamente <i>To contact</i>: il bacino si rigenera da solo. (Intervallo configurabile.)</li>
+    <li><b>Not interested</b> — finisce in blocklist: non riapparirà in nessuno scrape futuro.</li>
+  </ul>
+  <p class="caption">Niente pixel di tracciamento delle aperture, per scelta: sono inaffidabili e invasivi. Il segnale che conta — la risposta — viene rilevato in modo certo dal thread.</p>
+</section>
+
+<!-- ================= TODAY ================= -->
+<section>
+  <div class="stage">Fase 05 · Schermata</div>
+  <h2>Today: cosa fare stamattina</h2>
+  <p>La homepage. Non la lista completa, ma le tre cose che meritano attenzione oggi — il pezzo che sostituisce la memoria e i post-it.</p>
+
+  <div class="screen">
+    <div class="s-top"><span class="s-brand">Prospect Engine</span><span class="mono">Mon 6 Jul · 31 to contact · 8 sent this week · 3 open</span></div>
+    <div class="s-body">
+      <div class="s-panel">
+        <div class="s-eyebrow">Follow-ups due · 2</div>
+        <div class="cards">
+          <div class="card"><div class="h">Half Acre</div><div class="m">Contacted 9 days ago · no reply · follow-up ready</div></div>
+          <div class="card"><div class="h">Nico's Panini</div><div class="m">Contacted 7 days ago · no reply · follow-up ready</div></div>
+        </div>
+      </div>
+      <div class="s-panel">
+        <div class="s-eyebrow">Hot prospects, never contacted · 3</div>
+        <div class="cards">
+          <div class="card"><div class="h">Gilda Cantina <span class="nv">NEW</span></div><div class="m">Score 8/10 · High · Richmond</div></div>
+          <div class="card"><div class="h">Studio Meridian</div><div class="m">Score 7/10 · High · Windsor</div></div>
+          <div class="card"><div class="h">Baia di Vino</div><div class="m">High · Richmond · not analysed yet</div></div>
+        </div>
+      </div>
+      <div class="s-panel" style="margin-bottom:0">
+        <div class="s-eyebrow">Open conversations · 1</div>
+        <div class="cards">
+          <div class="card"><div class="h">Fratellino</div><div class="m">Replied 2 days ago · waiting on you</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="caption">Ogni card apre il dettaglio con l'azione già pronta (la follow-up generata, l'email da inviare). "Waiting on you" è il promemoria più prezioso: una conversazione aperta che si raffredda vale più di dieci contatti nuovi.</p>
+</section>
+
+<!-- ================= INSIGHTS ================= -->
+<section>
+  <div class="stage">Fase 05 · Schermata</div>
+  <h2>Insights: cosa funziona davvero</h2>
+  <p>Dopo qualche settimana di invii, i dati iniziano a rispondere alle domande giuste: quale variante di email converte di più? I locali nuovi rispondono davvero più spesso? Il punteggio di Claude predice le risposte?</p>
+
+  <div class="screen">
+    <div class="s-body">
+      <div class="grid2" style="grid-template-columns:1fr 1fr">
+        <div class="s-panel" style="margin:0">
+          <div class="s-eyebrow">Reply rate by variant</div>
+          <div class="bars" style="grid-template-columns:80px 1fr 70px">
+            <span>Warm</span><div class="b"><i style="width:38%;background:var(--hi)"></i></div><span class="mono">38% (5/13)</span>
+            <span>Technical</span><div class="b"><i style="width:21%;background:var(--hi)"></i></div><span class="mono">21% (3/14)</span>
+            <span>Follow-up</span><div class="b"><i style="width:17%;background:var(--hi)"></i></div><span class="mono">17% (2/12)</span>
+          </div>
+        </div>
+        <div class="s-panel" style="margin:0">
+          <div class="s-eyebrow">New venues vs established</div>
+          <div class="bars" style="grid-template-columns:80px 1fr 70px">
+            <span>New venue</span><div class="b"><i style="width:50%;background:var(--hi)"></i></div><span class="mono">50% (4/8)</span>
+            <span>Established</span><div class="b"><i style="width:24%;background:var(--hi)"></i></div><span class="mono">24% (6/25)</span>
+            <span>Score 8–10</span><div class="b"><i style="width:44%;background:var(--blue)"></i></div><span class="mono">44% (4/9)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="caption"><b>Le percentuali mostrano sempre i numeri assoluti</b> — "38% (5/13)" — perché con volumi da outreach personalizzato i campioni restano piccoli a lungo, e una percentuale nuda su 4 invii inganna. Sotto le 5 osservazioni il tool dice "not enough data" invece di mentire con sicurezza.</p>
+</section>
+
+<!-- ================= REFERENCE ================= -->
+<section>
+  <div class="stage">Riferimento rapido</div>
+  <h2>Stati, categorie e regole</h2>
+  <div class="ref">
+    <div class="ref-box">
+      <h4>Stati contatto</h4>
+      <ul>
+        <li><span class="legend-dot" style="background:#8A919E"></span><b>To contact</b> — mai contattato, o resettato dopo 6 mesi</li>
+        <li><span class="legend-dot" style="background:#5D9BD6"></span><b>Contacted</b> — cold email inviata, in attesa</li>
+        <li><span class="legend-dot" style="background:#DE9B3B"></span><b>No reply</b> — nessuna risposta dopo la follow-up</li>
+        <li><span class="legend-dot" style="background:#4CAF6E"></span><b>In conversation</b> — ha risposto (rilevato in automatico)</li>
+        <li><span class="legend-dot" style="background:#D95F4E"></span><b>Not interested</b> — in blocklist, mai più proposto</li>
+      </ul>
+    </div>
+    <div class="ref-box">
+      <h4>Categorie (valore del prospect)</h4>
+      <ul>
+        <li><span class="legend-dot" style="background:#4CAF6E"></span><b>High</b> — rating ≥ 4.5 e oltre 200 recensioni</li>
+        <li><span class="legend-dot" style="background:#DE9B3B"></span><b>Medium</b> — rating 4.0–4.5 oppure 100–200 recensioni</li>
+        <li><span class="legend-dot" style="background:#D95F4E"></span><b>Low</b> — tutto il resto</li>
+        <li><span class="legend-dot" style="border:1.5px dashed #B57718;background:none"></span><b>New venue</b> — flag a parte: rating ≥ 4.5 con 10–100 recensioni. Locale probabilmente appena aperto.</li>
+      </ul>
+    </div>
+    <div class="ref-box">
+      <h4>Regole delle email generate</h4>
+      <ul>
+        <li>Apertura "Hey [nome attività]", firma "Cheers, Francesco"</li>
+        <li>Un'osservazione gratuita e specifica sul loro contenuto video</li>
+        <li>Niente aggettivi generici ("stunning", "amazing")</li>
+        <li>CTA leggera: "Curious if this resonates?"</li>
+        <li>60–80 parole la cold, 40–60 la follow-up</li>
+      </ul>
+    </div>
+    <div class="ref-box">
+      <h4>Dati e sicurezza</h4>
+      <ul>
+        <li>Accesso protetto da login — utente singolo, registrazioni chiuse</li>
+        <li>Screenshot eliminati automaticamente dopo 5 giorni</li>
+        <li>Analisi ed email conservate per sempre nel contatto</li>
+        <li>Ogni cambio di stato registrato con data, a livello di database</li>
+        <li>Stack: Next.js/Vercel · Supabase · FastAPI/Railway · Claude API · Gmail API</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="footer">
+  UnFocus Prospect Engine · documentazione v1 · luglio 2026 — le schermate sono ricostruzioni illustrative del design approvato, non catture dell'app.
+</div>
+
+</div>
+</body>
+</html>
