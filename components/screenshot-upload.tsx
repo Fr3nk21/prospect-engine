@@ -32,9 +32,12 @@ async function resizeIfNeeded(file: File): Promise<File> {
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
-  bitmap.close()
-  if (!ctx) return file
+  if (!ctx) {
+    bitmap.close()
+    return file
+  }
   ctx.drawImage(bitmap, 0, 0, width, height)
+  bitmap.close()
 
   const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
   const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, outType, 0.85))
@@ -98,9 +101,11 @@ export default function ScreenshotUpload({
             setPending((prev) => prev.filter((p) => p.key !== key))
             router.refresh()
           }
-        } catch {
+        } catch (err) {
+          console.error('[screenshot-upload] threw before/around action call', err)
+          const message = err instanceof Error ? err.message : 'Upload failed.'
           setPending((prev) =>
-            prev.map((p) => (p.key === key ? { ...p, status: 'error', error: 'Upload failed.' } : p))
+            prev.map((p) => (p.key === key ? { ...p, status: 'error', error: message } : p))
           )
         }
       }
