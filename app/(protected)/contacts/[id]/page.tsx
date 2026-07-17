@@ -6,8 +6,9 @@ import StatusSelect from '@/components/status-select'
 import NoteForm from '@/components/note-form'
 import Timeline from '@/components/timeline'
 import ScreenshotUpload from '@/components/screenshot-upload'
+import AnalysisPanel from '@/components/analysis-panel'
 import { instagramUrl, type ContactDetail, type ContactEvent, type Screenshot } from '@/lib/contacts'
-import { updateContactStatus, addNote, uploadScreenshot, deleteScreenshot } from './actions'
+import { updateContactStatus, addNote, uploadScreenshot, deleteScreenshot, updateEmailVariant } from './actions'
 
 const SIGNED_URL_TTL_SECONDS = 3600
 
@@ -25,7 +26,7 @@ export default async function ContactDetailPage({
     supabase
       .from('contacts')
       .select(
-        'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, source'
+        'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, source, priority_score, score_breakdown, analysis, email_technical, email_warm, email_followup'
       )
       .eq('id', id)
       .single(),
@@ -97,6 +98,20 @@ export default async function ContactDetailPage({
               deleteScreenshot={deleteScreenshot}
             />
           </section>
+
+          <AnalysisPanel
+            contactId={c.id}
+            screenshotCount={screenshots.length}
+            scoreBreakdown={c.score_breakdown}
+            analysisSummary={c.analysis}
+            priorityScore={c.priority_score}
+            emails={{
+              email_technical: c.email_technical,
+              email_warm: c.email_warm,
+              email_followup: c.email_followup,
+            }}
+            updateEmailVariant={updateEmailVariant}
+          />
 
           <section className="panel">
             <div className="eyebrow">History</div>

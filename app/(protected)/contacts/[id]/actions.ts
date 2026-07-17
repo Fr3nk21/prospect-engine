@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import type { EmailVariant } from '@/lib/contacts'
 
 export async function updateContactStatus(contactId: string, newStatus: string) {
   const supabase = await createClient()
@@ -77,6 +78,12 @@ export async function uploadScreenshot(
 
   revalidatePath(`/contacts/${contactId}`)
   return { error: null }
+}
+
+export async function updateEmailVariant(contactId: string, variant: EmailVariant, body: string) {
+  const supabase = await createClient()
+  await supabase.from('contacts').update({ [variant]: body }).eq('id', contactId)
+  revalidatePath(`/contacts/${contactId}`)
 }
 
 export async function deleteScreenshot(

@@ -111,6 +111,20 @@ create table scrape_job_items (
   primary key (job_id, place_id)
 );
 
+-- ---------- ANALYSIS JOBS (Module 3.2 — async Claude Vision analysis) ----------
+create table analysis_jobs (
+  id          uuid primary key default gen_random_uuid(),
+  contact_id  uuid not null references contacts(id) on delete cascade,
+  status      text not null default 'queued'
+              check (status in ('queued','running','completed','failed')),
+  error       text,
+  started_at  timestamptz,
+  finished_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+
+create index idx_analysis_jobs_contact on analysis_jobs (contact_id, created_at desc);
+
 -- ---------- SCREENSHOTS (auto-deleted after 5 days by cron) ----------
 create table screenshots (
   id           uuid primary key default gen_random_uuid(),
@@ -149,6 +163,7 @@ alter table contacts         enable row level security;
 alter table contact_events   enable row level security;
 alter table scrape_jobs      enable row level security;
 alter table scrape_job_items enable row level security;
+alter table analysis_jobs    enable row level security;
 alter table screenshots      enable row level security;
 alter table blocklist        enable row level security;
 alter table settings         enable row level security;
@@ -161,6 +176,8 @@ create policy "authenticated full access" on contact_events
 create policy "authenticated full access" on scrape_jobs
   for all to authenticated using (true) with check (true);
 create policy "authenticated full access" on scrape_job_items
+  for all to authenticated using (true) with check (true);
+create policy "authenticated full access" on analysis_jobs
   for all to authenticated using (true) with check (true);
 create policy "authenticated full access" on screenshots
   for all to authenticated using (true) with check (true);

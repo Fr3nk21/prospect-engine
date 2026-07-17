@@ -26,6 +26,7 @@ SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service_role key — bypassa RLS>
 MAPS_API_KEY=<Google Maps Platform key, Places API (New) abilitata>
 SCRAPER_API_TOKEN=<stringa lunga casuale, condivisa col Next.js>
+ANTHROPIC_API_KEY=<chiave Claude API — la chiamata a Claude Vision gira qui, non su Vercel>
 ```
 
 `SCRAPER_API_TOKEN` deve combaciare con quello messo in `.env.local` del
@@ -52,6 +53,17 @@ curl -X POST https://prospect-engine-production-7809.up.railway.app/scrape \
 
 # Controlla l'avanzamento del job
 curl https://prospect-engine-production-7809.up.railway.app/scrape/<job_id> \
+  -H "Authorization: Bearer $TOKEN"
+
+# Avvia un'analisi Instagram (serve almeno uno screenshot già caricato per il contatto)
+curl -X POST https://prospect-engine-production-7809.up.railway.app/analyze \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"contact_id": "<uuid contatto>"}'
+# → {"job_id": "..."}
+
+# Controlla l'avanzamento dell'analisi
+curl https://prospect-engine-production-7809.up.railway.app/analyze/<job_id> \
   -H "Authorization: Bearer $TOKEN"
 ```
 

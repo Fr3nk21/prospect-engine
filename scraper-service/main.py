@@ -10,12 +10,14 @@ from __future__ import annotations
 import logging
 import os
 
+import anthropic
 import requests
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from supabase import Client, create_client
 
+import prospect_vision as pv
 import scraper_core as sc
 
 load_dotenv()
@@ -27,17 +29,20 @@ MAPS_API_KEY = os.getenv("MAPS_API_KEY", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 SCRAPER_API_TOKEN = os.getenv("SCRAPER_API_TOKEN", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 for name, value in [
     ("MAPS_API_KEY", MAPS_API_KEY),
     ("SUPABASE_URL", SUPABASE_URL),
     ("SUPABASE_SERVICE_ROLE_KEY", SUPABASE_SERVICE_ROLE_KEY),
     ("SCRAPER_API_TOKEN", SCRAPER_API_TOKEN),
+    ("ANTHROPIC_API_KEY", ANTHROPIC_API_KEY),
 ]:
     if not value:
         raise EnvironmentError(f"{name} is not set. Check scraper-service/.env")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 app = FastAPI(title="Prospect Engine Scraper")
 
@@ -80,6 +85,36 @@ def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks) -> dict:
 @app.get("/scrape/{job_id}", dependencies=[Depends(require_token)])
 def get_scrape_job(job_id: str) -> dict:
     result = supabase.table("scrape_jobs").select("*").eq("id", job_id).single().execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return result.data
+
+
+class AnalyzeRequest(BaseModel):
+    contact_id: str
+
+
+@app.post("/analyze", dependencies=[Depends(require_token)])
+def start_analysis(req: AnalyzeRequest, background_tasks: BackgroundTasks) -> dict:
+    contact_id = req.contact_id.strip()
+    if not contact_id:
+        raise HTTPException(status_code=422, detail="contact_id is required")
+
+    job = (
+        supabase.table("analysis_jobs")
+        .insert({"contact_id": contact_id, "status": "queued"})
+        .execute()
+    )
+    job_id = job.data[0]["id"]
+
+    background_tasks.add_task(run_analysis_job, job_id, contact_id)
+
+    return {"job_id": job_id}
+
+
+@app.get("/analyze/{job_id}", dependencies=[Depends(require_token)])
+def get_analysis_job(job_id: str) -> dict:
+    result = supabase.table("analysis_jobs").select("*").eq("id", job_id).single().execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Job not found")
     return result.data
@@ -213,5 +248,78 @@ def run_scrape_job(job_id: str, location: str, business_type: str) -> None:
     except Exception as exc:
         log.exception("[job %s] failed", job_id)
         supabase.table("scrape_jobs").update(
+            {"status": "failed", "error": str(exc), "finished_at": "now"}
+        ).eq("id", job_id).execute()
+
+
+def run_analysis_job(job_id: str, contact_id: str) -> None:
+    try:
+        supabase.table("analysis_jobs").update(
+            {"status": "running", "started_at": "now"}
+        ).eq("id", job_id).execute()
+
+        contact = (
+            supabase.table("contacts")
+            .select("name, business_type, suburb, website, instagram, rating, review_count")
+            .eq("id", contact_id)
+            .single()
+            .execute()
+        ).data
+
+        rows = (
+            supabase.table("screenshots")
+            .select("storage_path")
+            .eq("contact_id", contact_id)
+            .order("created_at")
+            .limit(pv.MAX_IMAGES)
+            .execute()
+        ).data
+        if not rows:
+            raise ValueError("No screenshots to analyze")
+
+        screenshots = [
+            (row["storage_path"], supabase.storage.from_("screenshots").download(row["storage_path"]))
+            for row in rows
+        ]
+
+        result = pv.analyze(anthropic_client, contact, screenshots)
+
+        dimensions = result.get("dimensions", [])
+        total_max = sum(d.get("max", 0) for d in dimensions) or 100
+        total_score = result.get("total_score", sum(d.get("score", 0) for d in dimensions))
+        priority_score = max(1, min(10, round(total_score / total_max * 10)))
+
+        supabase.table("contacts").update(
+            {
+                "analysis": result.get("summary", ""),
+                "score_breakdown": {
+                    "dimensions": dimensions,
+                    "total_score": total_score,
+                    "total_max": total_max,
+                    "has_videographer": result.get("has_videographer", "unclear"),
+                },
+                "priority_score": priority_score,
+                "email_technical": result.get("email_technical", ""),
+                "email_warm": result.get("email_warm", ""),
+                "email_followup": result.get("email_followup", ""),
+            }
+        ).eq("id", contact_id).execute()
+
+        supabase.table("contact_events").insert(
+            {
+                "contact_id": contact_id,
+                "type": "analysis",
+                "body": f"Instagram analysis: {total_score}/{total_max} — {result.get('summary', '')}",
+            }
+        ).execute()
+
+        supabase.table("analysis_jobs").update(
+            {"status": "completed", "finished_at": "now"}
+        ).eq("id", job_id).execute()
+        log.info("[analysis %s] completed for contact %s: %s/%s", job_id, contact_id, total_score, total_max)
+
+    except Exception as exc:
+        log.exception("[analysis %s] failed", job_id)
+        supabase.table("analysis_jobs").update(
             {"status": "failed", "error": str(exc), "finished_at": "now"}
         ).eq("id", job_id).execute()

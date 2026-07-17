@@ -228,6 +228,20 @@ textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
   .blur-in { animation: none !important; filter: none !important; }
 }
 
+/* ---------- Analysis panel ---------- */
+.score-breakdown { display: flex; flex-direction: column; gap: 10px; }
+.score-row { display: flex; flex-direction: column; gap: 4px; }
+.score-label { display: flex; justify-content: space-between; }
+.score-row p { margin-top: 2px; }
+.score-total { margin-top: 4px; text-align: right; }
+.email-variants {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+.email-variant { display: flex; flex-direction: column; gap: 8px; }
+.email-variant .btn-ghost { align-self: flex-start; }
+
 /* ---------- Contacts list ---------- */
 .list-head {
   display: flex;

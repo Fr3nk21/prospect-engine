@@ -33,6 +33,32 @@ export type ContactListItem = {
   last_contact_date: string | null
 }
 
+export type ScoreDimension = {
+  key: string
+  label: string
+  max: number
+  score: number
+  note: string
+}
+
+export type ScoreBreakdown = {
+  dimensions: ScoreDimension[]
+  total_score: number
+  total_max: number
+  has_videographer: 'yes' | 'no' | 'unclear'
+}
+
+export type EmailVariant = 'email_technical' | 'email_warm' | 'email_followup'
+
+export type AnalysisJob = {
+  id: string
+  contact_id: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  error: string | null
+  started_at: string | null
+  finished_at: string | null
+}
+
 export type ContactDetail = {
   id: string
   place_id: string | null
@@ -51,6 +77,12 @@ export type ContactDetail = {
   status: string
   last_contact_date: string | null
   source: string
+  priority_score: number | null
+  score_breakdown: ScoreBreakdown | null
+  analysis: string | null
+  email_technical: string | null
+  email_warm: string | null
+  email_followup: string | null
 }
 
 export type ScrapeJob = {
