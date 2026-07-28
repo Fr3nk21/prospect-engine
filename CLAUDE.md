@@ -182,11 +182,21 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
   - **Bug risolto (2026-07-28)**: `ANTHROPIC_API_KEY` su Railway era
     invalida — corretta nelle env var del servizio; test end-to-end in
     produzione ora passa.
-  - **Osservazione da investigare, non collegata ai bug sopra**: nei log
-    del dev server compaiono decine di `GET /login 200` ripetuti ogni
-    30-40ms prima della richiesta di analisi — possibile polling/loop
-    lato client (es. `useEffect` senza dipendenze corrette che causa
-    richieste ripetute verso `/login`). Non ancora investigato.
+  - **Osservazione investigata (2026-07-28), nessuna causa applicativa
+    trovata**: nei log del dev server erano comparse decine di
+    `GET /login 200` ripetuti ogni 30-40ms prima della richiesta di
+    analisi. Ipotesi iniziale (`useEffect` senza dipendenze corrette →
+    loop lato client) esclusa con evidenza: `app/login/page.tsx` è un
+    Server Component puro senza `useEffect`/fetch; tutti gli `useEffect`
+    in `analysis-panel.tsx`/`scrape-panel.tsx`/`topbar.tsx`/`contacts-
+    filter-bar.tsx` hanno dipendenze e guardie corrette; non esiste
+    nessun endpoint di polling GET per lo stato dei job (scrape/analysis
+    usano solo Supabase Realtime); nessun `setInterval` in tutto il
+    repo. Non riproducibile dal codice — probabile artefatto di
+    browser/dev-tools durante quella sessione di test specifica (cookie
+    di sessione scaduto su una tab, retry di una request reindirizzata).
+    Non bloccante; da catturare dal vivo (tab Network, initiator delle
+    richieste) se si ripresenta.
   Decisioni architetturali prese:
   - **Vercel Hobby impone davvero un cap di 60s** (verificato con un test
     reale: route con `maxDuration=60` e sleep di 65s → 504
