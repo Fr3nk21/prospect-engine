@@ -143,7 +143,7 @@ incolonnare più ricerche in sequenza.
 Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
 `docs/TASKS.md`.
 
-## Modulo 3 (Analisi Claude e generazione email) — 🚧 in corso
+## Modulo 3 (Analisi Claude e generazione email) — ✅ completato e testato
 
 - Task 3.1 (upload screenshot) **✅ completato e testato in locale**
   (drag&drop + click, limite 5MB, resize client-side, limite 10
@@ -161,35 +161,28 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
   le righe `screenshots` esistenti + genera signed URL per le anteprime,
   bucket privato). `next.config.ts`: `serverActions.bodySizeLimit`
   alzato a 6MB per far passare i file nelle Server Action.
-- Task 3.2 (analisi + generazione email): **implementazione scritta, non
-  ancora testata end-to-end** — codice presente ma non committato:
+- Task 3.2 (analisi + generazione email) **✅ completato e testato**, sia
+  in locale che in produzione su Railway. File:
   `app/api/contacts/[id]/analyze/route.ts` (proxy), `POST /analyze` e
   `GET /analyze/{job_id}` in `scraper-service/main.py`,
   `scraper-service/prospect_vision.py`, `components/analysis-panel.tsx`,
-  `db/migration_004_analysis_jobs.sql` (tabella `analysis_jobs`, da
-  eseguire su Supabase — non ancora eseguita).
-  - **Bug diagnosticato (2026-07-17), non ancora un bug di codice**: il
-    proxy Next.js chiamava `SCRAPER_SERVICE_URL` puntato a Railway
-    (produzione), che non ha ancora `/analyze` perché `main.py` non è
-    stato deployato (modifiche solo locali, mai committate). Risultato:
-    404 propagato fedelmente dal proxy (`route.ts` fa
-    `NextResponse.json(..., { status: response.status })`), con ~750ms
-    di ritardo dato dal round-trip di rete verso Railway — non un
-    `notFound()` nel codice né un problema di routing Next.js. Per ora
-    `.env.local` → `SCRAPER_SERVICE_URL=http://localhost:8000`, così i
-    test girano contro lo scraper-service in locale
-    (`uvicorn main:app --reload`) finché main.py/prospect_vision.py non
-    vengono committati e deployati su Railway.
-  - **Da fare per riprendere**: 1) avviare `uvicorn` in locale e testare
-    `POST /api/contacts/[id]/analyze` end-to-end (job creation, Claude
-    Vision, salvataggio su `contacts`, realtime); 2) eseguire
-    `migration_004_analysis_jobs.sql` su Supabase se non già fatto;
-    3) quando testato, committare main.py/prospect_vision.py/
-    analysis-panel.tsx/migration_004 e deployare su Railway,
-    ripristinando `SCRAPER_SERVICE_URL` all'URL Railway in `.env.local`;
-    4) `ANTHROPIC_API_KEY` va aggiunta alle env var di Railway prima del
-    deploy, non presente ancora lì.
-  - **Osservazione da investigare, non collegata al bug sopra**: nei log
+  `db/migration_004_analysis_jobs.sql` (tabella `analysis_jobs` — **già
+  eseguita su Supabase**, confermato 2026-07-27: `create table` dava
+  "relation already exists").
+  - **Bug diagnosticato (2026-07-17) e risolto**: il proxy Next.js
+    chiamava `SCRAPER_SERVICE_URL` puntato a Railway (produzione), che
+    non aveva ancora `/analyze` perché `main.py` non era stato
+    deployato (modifiche solo locali, mai committate). Risultato: 404
+    propagato fedelmente dal proxy (`route.ts` fa `NextResponse.json(...,
+    { status: response.status })`), con ~750ms di ritardo dato dal
+    round-trip di rete verso Railway — non un `notFound()` nel codice né
+    un problema di routing Next.js. Risolto committando
+    main.py/prospect_vision.py/analysis-panel.tsx e deployando su
+    Railway.
+  - **Bug risolto (2026-07-28)**: `ANTHROPIC_API_KEY` su Railway era
+    invalida — corretta nelle env var del servizio; test end-to-end in
+    produzione ora passa.
+  - **Osservazione da investigare, non collegata ai bug sopra**: nei log
     del dev server compaiono decine di `GET /login 200` ripetuti ogni
     30-40ms prima della richiesta di analisi — possibile polling/loop
     lato client (es. `useEffect` senza dipendenze corrette che causa
