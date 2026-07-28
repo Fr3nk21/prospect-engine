@@ -49,6 +49,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // api/cron/* is excluded: cron invocations carry no Supabase session
+    // cookie, so the redirect-to-/login logic above would otherwise block
+    // Vercel Cron before the route handler's own bearer-token check runs.
+    '/((?!_next/static|_next/image|favicon.ico|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

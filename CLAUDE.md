@@ -227,6 +227,27 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
   - Tracciabilità di quale variante viene poi usata in un invio reale:
     già coperta dallo schema esistente (`contact_events.email_variant`),
     non serve altro codice ora — verrà popolata nel Modulo 4 (invio).
+- Task 3.3 (cron pulizia screenshot) **✅ completato e testato** — 8
+  screenshot scaduti rimossi correttamente in test reale, analisi/email
+  sui contatti verificati (incluso "3 Idiots") rimaste intatte; test 401
+  senza header confermato. File: `app/api/cron/cleanup-screenshots/route.ts`
+  (`GET`, protetto da `Authorization: Bearer {CRON_SECRET}`, legge
+  `settings.screenshot_ttl_days`, cancella file da Storage poi righe da
+  `screenshots`, logga quanti file/righe rimossi), `lib/supabase/admin.ts`
+  (client `service_role`, necessario perché il cron non ha sessione utente
+  quindi niente cookie → l'anon client con RLS non vedrebbe nulla),
+  `vercel.json` (schedule daily `0 3 * * *`).
+  - **Decisione architetturale**: il matcher di `middleware.ts` includeva
+    `/api/*` e reindirizzava a `/login` qualunque richiesta senza sessione
+    Supabase — una chiamata cron (nessun cookie) sarebbe stata bloccata
+    prima di raggiungere la route. Escluso `api/cron` dal matcher
+    (`middleware.ts`); le altre route `/api/*` restano invariate perché
+    chiamate dal browser con sessione valida.
+  - Nuove env var: `CRON_SECRET` (Vercel la invia automaticamente come
+    header `Authorization: Bearer` sulle invocazioni cron quando la env
+    var è impostata sul progetto — stesso pattern di `SCRAPER_API_TOKEN`),
+    `SUPABASE_SERVICE_ROLE_KEY` (già in `.env.example`, ora anche in
+    `.env.local`).
 
 ## Development approach
 
