@@ -99,18 +99,23 @@ export async function sendEmail(
 
   const { data: contact } = await supabase
     .from('contacts')
-    .select('name, email, status')
+    .select('name, email, status, gmail_thread_id, gmail_message_id')
     .eq('id', contactId)
     .single()
 
   if (!contact?.email) return { error: 'This contact has no email address on file.' }
 
-  let sent: { id: string; threadId: string }
+  // A prior gmail_message_id means an earlier email already went to this
+  // contact — thread this one as a reply instead of starting a new
+  // conversation (subject gets "Re: " automatically inside sendGmailMessage).
+  let sent: { id: string; threadId: string; messageId: string }
   try {
     sent = await sendGmailMessage({
       to: contact.email,
       subject: `${contact.name} — quick thought`,
       body: trimmedBody,
+      threadId: contact.gmail_message_id ? contact.gmail_thread_id ?? undefined : undefined,
+      inReplyTo: contact.gmail_message_id ?? undefined,
     })
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Could not send the email.' }
@@ -120,7 +125,10 @@ export async function sendEmail(
 
   // Only "To contact" moves to "Contacted" here — a follow-up sent while
   // already "In conversation" (etc.) shouldn't regress the status.
-  const statusUpdate: Record<string, string> = { gmail_thread_id: sent.threadId }
+  const statusUpdate: Record<string, string> = {
+    gmail_thread_id: sent.threadId,
+    gmail_message_id: sent.messageId,
+  }
   if (contact.status === 'To contact') statusUpdate.status = 'Contacted'
 
   await supabase.from('contacts').update(statusUpdate).eq('id', contactId)

@@ -270,43 +270,59 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
   callback/route.ts` scambia il code e mostra il refresh_token una tantum
   da incollare in `GMAIL_REFRESH_TOKEN`. Refresh token ottenuto e salvato
   in `.env.local` (da aggiungere anche su Vercel prima del deploy).
-- Task 4.2 (invio dall'app) **✅ implementato, da testare end-to-end**.
+- Task 4.2 (invio dall'app) **✅ completato e testato end-to-end** (email
+  arrivata, Inviati su info@unfocus.com.au corretto, stato → Contacted,
+  evento `email_sent` in cronologia col testo giusto).
   File: `lib/gmail.ts` (`sendGmailMessage` — refresh dell'access token via
   REST, costruisce il messaggio RFC 2822 raw base64url, POST a
   `gmail.googleapis.com/.../messages/send`; niente dipendenza
   `googleapis`, stesso stile a chiamate REST dirette già usato per Places
   API New e per il token exchange di `callback/route.ts`),
-  `app/(protected)/contacts/[id]/actions.ts` (nuova server action
-  `sendEmail`: invia, poi aggiorna `contacts.gmail_thread_id` e logga
-  l'evento `email_sent` con la variante usata), bottone "Send" per
+  `app/(protected)/contacts/[id]/actions.ts` (server action `sendEmail`:
+  invia, poi aggiorna `contacts.gmail_thread_id`/`gmail_message_id` e
+  logga l'evento `email_sent` con la variante usata), bottone "Send" per
   variante in `components/analysis-panel.tsx` (con `window.confirm` prima
-  dell'invio — azione irreversibile e reale).
+  dell'invio — azione irreversibile e reale), più un bottone "Expand" che
+  apre la stessa textarea/Save/Send in un modal a schermo intero (stesso
+  state React, nessun draft separato: "Close"/backdrop/Escape chiudono il
+  modal ma non scartano le modifiche già digitate).
+  - **Bug risolto durante il test**: l'header `Subject` veniva scritto
+    raw (`Subject: ${subject}`), senza MIME encoding — un nome contatto
+    con em dash ("TEST — Fuffa Restaurant") arrivava corrotto
+    ("Hey TEST Ã¢Â€Â" Fuffa Restaurant"). Fix in `lib/gmail.ts`:
+    `encodeHeaderValue` avvolge il subject in RFC 2047 encoded-word
+    (`=?UTF-8?B?<base64>?=`) solo se contiene caratteri non-ASCII, lascia
+    invariati i subject puramente ASCII.
   - **Decisioni prese**:
     - Nessun pattern async/job come scrape o analisi: l'invio Gmail è
       un'unica chiamata REST, ben sotto il limite di 60s di Vercel Hobby
       (vedi nota in Modulo 3.2) — gira sincrono dentro la server action.
-    - Subject dell'email: `Hey {business_name}`, per coerenza col saluto
-      già presente nel corpo generato ("Hey [business name]").
+    - Subject dell'email: `{business_name} — quick thought` (niente
+      "Hey" — quello resta solo nel saluto del corpo). Diventa
+      `Re: {business_name} — quick thought` in automatico quando l'invio
+      è un follow-up in thread (vedi sotto).
     - Lo stato passa a `Contacted` (il trigger DB logga da solo) **solo
       se era `To contact`** — un follow-up inviato mentre il contatto è
       già `In conversation`/`No reply` non deve retrocedere lo stato.
-    - Per ora **ogni Send crea sempre una nuova email**, anche per la
-      variante `email_followup` — nessun threading Gmail (`In-Reply-To`/
-      `References`) ancora. Deciso esplicitamente da Francesco per tenere
-      semplice il primo giro di test end-to-end. Da aggiungere subito
-      dopo (non è la stessa cosa del polling risposte del task 4.3, che
-      riguarda leggere le risposte, non come si invia il follow-up): il
-      threading corretto richiederà di salvare anche il `Message-ID` RFC
-      del messaggio originale (non basta `gmail_thread_id`, che Gmail
-      assegna automaticamente ma va accoppiato a `In-Reply-To`/
-      `References` per apparire nello stesso thread lato destinatario) —
-      probabile nuova colonna su `contacts` o `contact_events` quando si
-      implementa.
     - Se il contatto non ha `email` in anagrafica, il bottone "Send" è
       disabilitato (tooltip) invece di fallire silenziosamente.
-  - **Da testare**: invio reale end-to-end (l'email parte, compare in
-    Inviati su info@unfocus.com.au, lo stato passa a Contacted, l'evento
-    compare in cronologia) — non ancora verificato in locale/produzione.
+  - **Threading follow-up (rifinitura post-test, decisa con Francesco)**:
+    implementato. Problema: `gmail_thread_id` da solo non basta per far
+    apparire un'email nello stesso thread Gmail lato destinatario — serve
+    anche l'header RFC `Message-ID` del messaggio precedente da passare
+    come `In-Reply-To`/`References`. Legere quell'header via l'API
+    richiederebbe però lo scope `gmail.readonly` (deliberatamente non
+    richiesto — vedi task 4.1). Soluzione: `lib/gmail.ts` genera lui
+    stesso un `Message-ID` (`<uuid@unfocus.com.au>`) ad ogni invio, lo
+    imposta esplicitamente nell'header in uscita, e lo restituisce alla
+    server action, che lo salva in `contacts.gmail_message_id`
+    (`db/migration_005_gmail_message_id.sql`, **da eseguire su
+    Supabase** — colonna aggiunta anche in `db/schema.sql`). Al prossimo
+    invio per lo stesso contatto, se `gmail_message_id` è già valorizzato,
+    `sendGmailMessage` aggiunge `In-Reply-To`/`References` e il
+    `threadId` esistente, e il subject diventa `Re: ...` — quindi ora
+    **solo il primo invio per un contatto apre un nuovo thread**, tutti i
+    successivi (tipicamente il follow-up) rispondono in thread.
 
 ## Development approach
 

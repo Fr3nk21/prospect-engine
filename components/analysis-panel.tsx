@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
@@ -224,6 +224,14 @@ function EmailVariantEditor({
   const [saved, setSaved] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  function handleSave() {
+    startTransition(async () => {
+      await updateEmailVariant(contactId, variant, value)
+      setSaved(true)
+    })
+  }
 
   function handleSend() {
     if (!contactEmail) return
@@ -238,8 +246,29 @@ function EmailVariantEditor({
         return
       }
       setSent(true)
+      setExpanded(false)
     })
   }
+
+  const actions = (
+    <div className="email-variant-actions">
+      <button className="btn-ghost small" type="button" onClick={() => setExpanded(true)}>
+        Expand ↗
+      </button>
+      <button className="btn-ghost small" type="button" disabled={isPending} onClick={handleSave}>
+        {isPending ? '…' : saved ? 'Saved' : 'Save'}
+      </button>
+      <button
+        className="btn-primary small"
+        type="button"
+        disabled={isSending || !contactEmail || !value.trim()}
+        title={!contactEmail ? 'This contact has no email address on file.' : undefined}
+        onClick={handleSend}
+      >
+        {isSending ? 'Sending…' : sent ? 'Sent ✓' : 'Send'}
+      </button>
+    </div>
+  )
 
   return (
     <div className="email-variant">
@@ -252,35 +281,64 @@ function EmailVariantEditor({
           setSaved(false)
         }}
       />
-      <div className="email-variant-actions">
-        <button
-          className="btn-ghost small"
-          type="button"
-          disabled={isPending}
-          onClick={() =>
-            startTransition(async () => {
-              await updateEmailVariant(contactId, variant, value)
-              setSaved(true)
-            })
-          }
-        >
-          {isPending ? '…' : saved ? 'Saved' : 'Save'}
-        </button>
-        <button
-          className="btn-primary small"
-          type="button"
-          disabled={isSending || !contactEmail || !value.trim()}
-          title={!contactEmail ? 'This contact has no email address on file.' : undefined}
-          onClick={handleSend}
-        >
-          {isSending ? 'Sending…' : sent ? 'Sent ✓' : 'Send'}
-        </button>
-      </div>
+      {actions}
       {sendError && (
         <p className="hint mono" style={{ color: 'var(--rec)' }}>
           {sendError}
         </p>
       )}
+
+      {expanded && (
+        <EmailModal label={label} onClose={() => setExpanded(false)}>
+          <textarea
+            className="modal-textarea"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value)
+              setSaved(false)
+            }}
+            autoFocus
+          />
+          {actions}
+          {sendError && (
+            <p className="hint mono" style={{ color: 'var(--rec)' }}>
+              {sendError}
+            </p>
+          )}
+        </EmailModal>
+      )}
+    </div>
+  )
+}
+
+function EmailModal({
+  label,
+  onClose,
+  children,
+}: {
+  label: string
+  onClose: () => void
+  children: ReactNode
+}) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <span className="eyebrow">{label}</span>
+          <button className="btn-ghost small" type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {children}
+      </div>
     </div>
   )
 }

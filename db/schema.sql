@@ -34,6 +34,8 @@ create table contacts (
 
   -- Gmail integration (Module 4)
   gmail_thread_id   text,
+  gmail_message_id  text,             -- RFC Message-ID of the last email sent;
+                                       -- needed to thread a follow-up (In-Reply-To/References)
 
   source            text not null default 'scraper'
                     check (source in ('scraper','sheet_import','manual')),

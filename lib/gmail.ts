@@ -2,6 +2,8 @@
 // no read access, so this can't check inboxes or threads (that's Module 4.3,
 // a separate OAuth re-consent).
 
+import { randomUUID } from 'node:crypto'
+
 const FROM_ADDRESS = 'info@unfocus.com.au'
 
 async function getAccessToken(): Promise<string> {
@@ -40,16 +42,41 @@ function encodeHeaderValue(value: string): string {
   return `=?UTF-8?B?${Buffer.from(value, 'utf-8').toString('base64')}?=`
 }
 
-function buildRawMessage({ to, subject, body }: { to: string; subject: string; body: string }): string {
-  const message = [
+// The Gmail API's own message `id` is not the RFC822 Message-ID header, and
+// reading that header back would require the gmail.readonly scope (which
+// this app deliberately doesn't have — see module header). So we mint our
+// own Message-ID up front, set it explicitly on the outgoing message, and
+// persist it — the next send can then thread off it via In-Reply-To/
+// References without ever needing to read a message back.
+function generateMessageId(): string {
+  return `<${randomUUID()}@unfocus.com.au>`
+}
+
+function buildRawMessage({
+  to,
+  subject,
+  body,
+  messageId,
+  inReplyTo,
+}: {
+  to: string
+  subject: string
+  body: string
+  messageId: string
+  inReplyTo?: string
+}): string {
+  const headers = [
     `From: ${FROM_ADDRESS}`,
     `To: ${to}`,
     `Subject: ${encodeHeaderValue(subject)}`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    '',
-    body,
-  ].join('\r\n')
+    `Message-ID: ${messageId}`,
+  ]
+  if (inReplyTo) {
+    headers.push(`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`)
+  }
+  headers.push('Content-Type: text/plain; charset="UTF-8"')
 
+  const message = [...headers, '', body].join('\r\n')
   return base64UrlEncode(message)
 }
 
@@ -57,13 +84,26 @@ export async function sendGmailMessage({
   to,
   subject,
   body,
+  threadId,
+  inReplyTo,
 }: {
   to: string
   subject: string
   body: string
-}): Promise<{ id: string; threadId: string }> {
+  // Both must come from a prior send to this contact — thread the reply
+  // instead of starting a new conversation. Omit both for a first send.
+  threadId?: string
+  inReplyTo?: string
+}): Promise<{ id: string; threadId: string; messageId: string }> {
   const accessToken = await getAccessToken()
-  const raw = buildRawMessage({ to, subject, body })
+  const messageId = generateMessageId()
+  const raw = buildRawMessage({
+    to,
+    subject: inReplyTo ? `Re: ${subject}` : subject,
+    body,
+    messageId,
+    inReplyTo,
+  })
 
   const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
@@ -71,7 +111,7 @@ export async function sendGmailMessage({
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ raw }),
+    body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
   })
 
   const data = await res.json()
@@ -79,5 +119,5 @@ export async function sendGmailMessage({
     throw new Error(`Gmail send failed: ${data.error?.message ?? res.status}`)
   }
 
-  return { id: data.id, threadId: data.threadId }
+  return { id: data.id, threadId: data.threadId, messageId }
 }
