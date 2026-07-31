@@ -259,6 +259,55 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
     `SUPABASE_SERVICE_ROLE_KEY` (già in `.env.example`, ora anche in
     `.env.local`).
 
+## Modulo 4 (Gmail) — in corso
+
+- Task 4.1 (OAuth interno) **✅ completato**. Consent screen Internal,
+  scope solo `gmail.send` (niente `gmail.readonly` per ora — servirà solo
+  al polling risposte, task 4.3, e richiederà un nuovo consenso). Flusso
+  one-shot: `app/api/auth/gmail/start/route.ts` reindirizza al consenso
+  Google (`prompt: 'consent'` per forzare un nuovo refresh_token anche se
+  l'account aveva già autorizzato l'app in passato), `app/api/auth/gmail/
+  callback/route.ts` scambia il code e mostra il refresh_token una tantum
+  da incollare in `GMAIL_REFRESH_TOKEN`. Refresh token ottenuto e salvato
+  in `.env.local` (da aggiungere anche su Vercel prima del deploy).
+- Task 4.2 (invio dall'app) **✅ implementato, da testare end-to-end**.
+  File: `lib/gmail.ts` (`sendGmailMessage` — refresh dell'access token via
+  REST, costruisce il messaggio RFC 2822 raw base64url, POST a
+  `gmail.googleapis.com/.../messages/send`; niente dipendenza
+  `googleapis`, stesso stile a chiamate REST dirette già usato per Places
+  API New e per il token exchange di `callback/route.ts`),
+  `app/(protected)/contacts/[id]/actions.ts` (nuova server action
+  `sendEmail`: invia, poi aggiorna `contacts.gmail_thread_id` e logga
+  l'evento `email_sent` con la variante usata), bottone "Send" per
+  variante in `components/analysis-panel.tsx` (con `window.confirm` prima
+  dell'invio — azione irreversibile e reale).
+  - **Decisioni prese**:
+    - Nessun pattern async/job come scrape o analisi: l'invio Gmail è
+      un'unica chiamata REST, ben sotto il limite di 60s di Vercel Hobby
+      (vedi nota in Modulo 3.2) — gira sincrono dentro la server action.
+    - Subject dell'email: `Hey {business_name}`, per coerenza col saluto
+      già presente nel corpo generato ("Hey [business name]").
+    - Lo stato passa a `Contacted` (il trigger DB logga da solo) **solo
+      se era `To contact`** — un follow-up inviato mentre il contatto è
+      già `In conversation`/`No reply` non deve retrocedere lo stato.
+    - Per ora **ogni Send crea sempre una nuova email**, anche per la
+      variante `email_followup` — nessun threading Gmail (`In-Reply-To`/
+      `References`) ancora. Deciso esplicitamente da Francesco per tenere
+      semplice il primo giro di test end-to-end. Da aggiungere subito
+      dopo (non è la stessa cosa del polling risposte del task 4.3, che
+      riguarda leggere le risposte, non come si invia il follow-up): il
+      threading corretto richiederà di salvare anche il `Message-ID` RFC
+      del messaggio originale (non basta `gmail_thread_id`, che Gmail
+      assegna automaticamente ma va accoppiato a `In-Reply-To`/
+      `References` per apparire nello stesso thread lato destinatario) —
+      probabile nuova colonna su `contacts` o `contact_events` quando si
+      implementa.
+    - Se il contatto non ha `email` in anagrafica, il bottone "Send" è
+      disabilitato (tooltip) invece di fallire silenziosamente.
+  - **Da testare**: invio reale end-to-end (l'email parte, compare in
+    Inviati su info@unfocus.com.au, lo stato passa a Contacted, l'evento
+    compare in cronologia) — non ancora verificato in locale/produzione.
+
 ## Development approach
 
 Work module by module, end-to-end, testing before moving on (see /docs/TASKS.md).

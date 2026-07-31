@@ -182,6 +182,7 @@ textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-primary:disabled { opacity: .55; cursor: default; }
 .btn-primary.wide { width: 100%; margin-top: 4px; }
+.btn-primary.small { padding: 6px 14px; font-size: 12.5px; }
 .btn-ghost {
   background: none;
   border: 1px solid var(--line);
@@ -240,7 +241,7 @@ textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
   gap: 16px;
 }
 .email-variant { display: flex; flex-direction: column; gap: 8px; }
-.email-variant .btn-ghost { align-self: flex-start; }
+.email-variant-actions { display: flex; gap: 8px; }
 
 /* ---------- Contacts list ---------- */
 .list-head {

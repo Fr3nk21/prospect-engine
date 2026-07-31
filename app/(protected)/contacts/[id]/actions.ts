@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { sendGmailMessage } from '@/lib/gmail'
 import type { EmailVariant } from '@/lib/contacts'
 
 export async function updateContactStatus(contactId: string, newStatus: string) {
@@ -84,6 +85,57 @@ export async function updateEmailVariant(contactId: string, variant: EmailVarian
   const supabase = await createClient()
   await supabase.from('contacts').update({ [variant]: body }).eq('id', contactId)
   revalidatePath(`/contacts/${contactId}`)
+}
+
+export async function sendEmail(
+  contactId: string,
+  variant: EmailVariant,
+  body: string
+): Promise<{ error: string | null }> {
+  const trimmedBody = body.trim()
+  if (!trimmedBody) return { error: 'Email body is empty.' }
+
+  const supabase = await createClient()
+
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('name, email, status')
+    .eq('id', contactId)
+    .single()
+
+  if (!contact?.email) return { error: 'This contact has no email address on file.' }
+
+  let sent: { id: string; threadId: string }
+  try {
+    sent = await sendGmailMessage({
+      to: contact.email,
+      subject: `${contact.name} — quick thought`,
+      body: trimmedBody,
+    })
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Could not send the email.' }
+  }
+
+  const emailVariant = variant.replace(/^email_/, '') as 'technical' | 'warm' | 'followup'
+
+  // Only "To contact" moves to "Contacted" here — a follow-up sent while
+  // already "In conversation" (etc.) shouldn't regress the status.
+  const statusUpdate: Record<string, string> = { gmail_thread_id: sent.threadId }
+  if (contact.status === 'To contact') statusUpdate.status = 'Contacted'
+
+  await supabase.from('contacts').update(statusUpdate).eq('id', contactId)
+
+  await supabase.from('contact_events').insert({
+    contact_id: contactId,
+    type: 'email_sent',
+    email_variant: emailVariant,
+    body: trimmedBody,
+  })
+
+  revalidatePath(`/contacts/${contactId}`)
+  revalidatePath('/contacts')
+
+  return { error: null }
 }
 
 export async function deleteScreenshot(

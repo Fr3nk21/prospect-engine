@@ -14,20 +14,28 @@ const EMAIL_VARIANTS: { key: EmailVariant; label: string }[] = [
 
 export default function AnalysisPanel({
   contactId,
+  contactEmail,
   screenshotCount,
   scoreBreakdown,
   analysisSummary,
   priorityScore,
   emails,
   updateEmailVariant,
+  sendEmail,
 }: {
   contactId: string
+  contactEmail: string | null
   screenshotCount: number
   scoreBreakdown: ScoreBreakdown | null
   analysisSummary: string | null
   priorityScore: number | null
   emails: Record<EmailVariant, string | null>
   updateEmailVariant: (contactId: string, variant: EmailVariant, body: string) => Promise<void>
+  sendEmail: (
+    contactId: string,
+    variant: EmailVariant,
+    body: string
+  ) => Promise<{ error: string | null }>
 }) {
   const router = useRouter()
   const [job, setJob] = useState<AnalysisJob | null>(null)
@@ -175,10 +183,12 @@ export default function AnalysisPanel({
             <EmailVariantEditor
               key={key}
               contactId={contactId}
+              contactEmail={contactEmail}
               variant={key}
               label={label}
               initialValue={emails[key] ?? ''}
               updateEmailVariant={updateEmailVariant}
+              sendEmail={sendEmail}
             />
           ))}
         </div>
@@ -189,20 +199,47 @@ export default function AnalysisPanel({
 
 function EmailVariantEditor({
   contactId,
+  contactEmail,
   variant,
   label,
   initialValue,
   updateEmailVariant,
+  sendEmail,
 }: {
   contactId: string
+  contactEmail: string | null
   variant: EmailVariant
   label: string
   initialValue: string
   updateEmailVariant: (contactId: string, variant: EmailVariant, body: string) => Promise<void>
+  sendEmail: (
+    contactId: string,
+    variant: EmailVariant,
+    body: string
+  ) => Promise<{ error: string | null }>
 }) {
   const [value, setValue] = useState(initialValue)
   const [isPending, startTransition] = useTransition()
+  const [isSending, startSendTransition] = useTransition()
   const [saved, setSaved] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
+
+  function handleSend() {
+    if (!contactEmail) return
+    const confirmed = window.confirm(`Send this email to ${contactEmail}? This can't be undone.`)
+    if (!confirmed) return
+
+    setSendError(null)
+    startSendTransition(async () => {
+      const result = await sendEmail(contactId, variant, value)
+      if (result.error) {
+        setSendError(result.error)
+        return
+      }
+      setSent(true)
+    })
+  }
 
   return (
     <div className="email-variant">
@@ -215,19 +252,35 @@ function EmailVariantEditor({
           setSaved(false)
         }}
       />
-      <button
-        className="btn-ghost small"
-        type="button"
-        disabled={isPending}
-        onClick={() =>
-          startTransition(async () => {
-            await updateEmailVariant(contactId, variant, value)
-            setSaved(true)
-          })
-        }
-      >
-        {isPending ? '…' : saved ? 'Saved' : 'Save'}
-      </button>
+      <div className="email-variant-actions">
+        <button
+          className="btn-ghost small"
+          type="button"
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              await updateEmailVariant(contactId, variant, value)
+              setSaved(true)
+            })
+          }
+        >
+          {isPending ? '…' : saved ? 'Saved' : 'Save'}
+        </button>
+        <button
+          className="btn-primary small"
+          type="button"
+          disabled={isSending || !contactEmail || !value.trim()}
+          title={!contactEmail ? 'This contact has no email address on file.' : undefined}
+          onClick={handleSend}
+        >
+          {isSending ? 'Sending…' : sent ? 'Sent ✓' : 'Send'}
+        </button>
+      </div>
+      {sendError && (
+        <p className="hint mono" style={{ color: 'var(--rec)' }}>
+          {sendError}
+        </p>
+      )}
     </div>
   )
 }

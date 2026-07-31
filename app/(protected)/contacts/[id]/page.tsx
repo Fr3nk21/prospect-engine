@@ -8,7 +8,14 @@ import Timeline from '@/components/timeline'
 import ScreenshotUpload from '@/components/screenshot-upload'
 import AnalysisPanel from '@/components/analysis-panel'
 import { instagramUrl, type ContactDetail, type ContactEvent, type Screenshot } from '@/lib/contacts'
-import { updateContactStatus, addNote, uploadScreenshot, deleteScreenshot, updateEmailVariant } from './actions'
+import {
+  updateContactStatus,
+  addNote,
+  uploadScreenshot,
+  deleteScreenshot,
+  updateEmailVariant,
+  sendEmail,
+} from './actions'
 
 const SIGNED_URL_TTL_SECONDS = 3600
 
@@ -101,6 +108,7 @@ export default async function ContactDetailPage({
 
           <AnalysisPanel
             contactId={c.id}
+            contactEmail={c.email}
             screenshotCount={screenshots.length}
             scoreBreakdown={c.score_breakdown}
             analysisSummary={c.analysis}
@@ -111,6 +119,7 @@ export default async function ContactDetailPage({
               email_followup: c.email_followup,
             }}
             updateEmailVariant={updateEmailVariant}
+            sendEmail={sendEmail}
           />
 
           <section className="panel">
