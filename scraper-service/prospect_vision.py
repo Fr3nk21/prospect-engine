@@ -77,6 +77,39 @@ def _media_type(storage_path: str) -> str:
     return MEDIA_TYPES.get(ext, "image/jpeg")
 
 
+def _parse_json_response(raw_text: str) -> dict:
+    """Claude is asked for raw JSON but sometimes wraps it in a ```json fence
+    or adds a sentence before/after anyway — non-deterministic, seen in
+    production. Strip fences if present, then fall back to slicing between
+    the first '{' and the last '}' before giving up."""
+    text = raw_text.strip()
+
+    if text.startswith("```"):
+        first_newline = text.find("\n")
+        if first_newline != -1:
+            text = text[first_newline + 1 :]
+        if text.endswith("```"):
+            text = text[: -len("```")]
+        text = text.strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError(
+        f"Could not parse JSON from Claude's response. Raw text received:\n{raw_text}"
+    )
+
+
 def analyze(
     client: anthropic.Anthropic,
     contact: dict,
@@ -107,10 +140,5 @@ def analyze(
         messages=[{"role": "user", "content": content}],
     )
 
-    raw_text = response.content[0].text.strip()
-    if raw_text.startswith("```"):
-        raw_text = raw_text.split("\n", 1)[1]
-    if raw_text.endswith("```"):
-        raw_text = raw_text.rsplit("```", 1)[0]
-
-    return json.loads(raw_text.strip())
+    raw_text = response.content[0].text
+    return _parse_json_response(raw_text)
