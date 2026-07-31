@@ -20,6 +20,7 @@ export default function AnalysisPanel({
   analysisSummary,
   priorityScore,
   emails,
+  sentVariants,
   updateEmailVariant,
   sendEmail,
 }: {
@@ -30,6 +31,7 @@ export default function AnalysisPanel({
   analysisSummary: string | null
   priorityScore: number | null
   emails: Record<EmailVariant, string | null>
+  sentVariants: string[]
   updateEmailVariant: (contactId: string, variant: EmailVariant, body: string) => Promise<void>
   sendEmail: (
     contactId: string,
@@ -187,6 +189,7 @@ export default function AnalysisPanel({
               variant={key}
               label={label}
               initialValue={emails[key] ?? ''}
+              initiallySent={sentVariants.includes(key.replace(/^email_/, ''))}
               updateEmailVariant={updateEmailVariant}
               sendEmail={sendEmail}
             />
@@ -197,12 +200,19 @@ export default function AnalysisPanel({
   )
 }
 
+function truncate(text: string, max = 160): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= max) return trimmed
+  return trimmed.slice(0, max).trimEnd() + '…'
+}
+
 function EmailVariantEditor({
   contactId,
   contactEmail,
   variant,
   label,
   initialValue,
+  initiallySent,
   updateEmailVariant,
   sendEmail,
 }: {
@@ -211,6 +221,7 @@ function EmailVariantEditor({
   variant: EmailVariant
   label: string
   initialValue: string
+  initiallySent: boolean
   updateEmailVariant: (contactId: string, variant: EmailVariant, body: string) => Promise<void>
   sendEmail: (
     contactId: string,
@@ -218,88 +229,116 @@ function EmailVariantEditor({
     body: string
   ) => Promise<{ error: string | null }>
 }) {
-  const [value, setValue] = useState(initialValue)
+  // savedValue = last value confirmed persisted (from the server, or after a
+  // successful Save/Send). draft only exists while the modal is open, and is
+  // discarded (not merged back) on Cancel/X — Save is what commits it.
+  const [savedValue, setSavedValue] = useState(initialValue)
+  const [draft, setDraft] = useState(initialValue)
+  const [expanded, setExpanded] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [isSending, startSendTransition] = useTransition()
   const [saved, setSaved] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
-  const [sent, setSent] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const [sent, setSent] = useState(initiallySent)
+
+  function openModal() {
+    setDraft(savedValue)
+    setSendError(null)
+    setExpanded(true)
+  }
+
+  function requestClose() {
+    if (draft !== savedValue) {
+      const discard = window.confirm('Discard unsaved changes to this email?')
+      if (!discard) return
+    }
+    setExpanded(false)
+  }
 
   function handleSave() {
     startTransition(async () => {
-      await updateEmailVariant(contactId, variant, value)
+      await updateEmailVariant(contactId, variant, draft)
+      setSavedValue(draft)
       setSaved(true)
     })
   }
 
-  function handleSend() {
+  function handleSend(text: string) {
     if (!contactEmail) return
     const confirmed = window.confirm(`Send this email to ${contactEmail}? This can't be undone.`)
     if (!confirmed) return
 
     setSendError(null)
     startSendTransition(async () => {
-      const result = await sendEmail(contactId, variant, value)
+      const result = await sendEmail(contactId, variant, text)
       if (result.error) {
         setSendError(result.error)
         return
       }
+      // Whatever was actually sent becomes the saved value too, even if the
+      // user tweaked the draft and hit Send without an explicit Save first
+      // — otherwise a reload would show stale, unsent text.
+      if (text !== savedValue) await updateEmailVariant(contactId, variant, text)
+      setSavedValue(text)
       setSent(true)
       setExpanded(false)
     })
   }
 
-  const actions = (
-    <div className="email-variant-actions">
-      <button className="btn-ghost small" type="button" onClick={() => setExpanded(true)}>
-        Expand ↗
-      </button>
-      <button className="btn-ghost small" type="button" disabled={isPending} onClick={handleSave}>
-        {isPending ? '…' : saved ? 'Saved' : 'Save'}
-      </button>
-      <button
-        className="btn-primary small"
-        type="button"
-        disabled={isSending || !contactEmail || !value.trim()}
-        title={!contactEmail ? 'This contact has no email address on file.' : undefined}
-        onClick={handleSend}
-      >
-        {isSending ? 'Sending…' : sent ? 'Sent ✓' : 'Send'}
-      </button>
-    </div>
-  )
-
   return (
     <div className="email-variant">
       <div className="eyebrow">{label}</div>
-      <textarea
-        rows={6}
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value)
-          setSaved(false)
-        }}
-      />
-      {actions}
-      {sendError && (
+      <p className="email-preview hint dim">
+        {savedValue.trim() ? truncate(savedValue) : 'Empty — click Edit to write one.'}
+      </p>
+      <div className="email-variant-actions">
+        <button className="btn-ghost small" type="button" onClick={openModal}>
+          Edit
+        </button>
+        <button
+          className="btn-primary small"
+          type="button"
+          disabled={isSending || !contactEmail || !savedValue.trim()}
+          title={!contactEmail ? 'This contact has no email address on file.' : undefined}
+          onClick={() => handleSend(savedValue)}
+        >
+          {isSending ? 'Sending…' : sent ? 'Sent ✓' : 'Send'}
+        </button>
+      </div>
+      {sendError && !expanded && (
         <p className="hint mono" style={{ color: 'var(--rec)' }}>
           {sendError}
         </p>
       )}
 
       {expanded && (
-        <EmailModal label={label} onClose={() => setExpanded(false)}>
+        <EmailModal label={label} onClose={requestClose}>
           <textarea
             className="modal-textarea"
-            value={value}
+            value={draft}
             onChange={(e) => {
-              setValue(e.target.value)
+              setDraft(e.target.value)
               setSaved(false)
             }}
             autoFocus
           />
-          {actions}
+          <div className="email-variant-actions">
+            <button className="btn-ghost small" type="button" onClick={requestClose}>
+              Cancel
+            </button>
+            <button className="btn-ghost small" type="button" disabled={isPending} onClick={handleSave}>
+              {isPending ? '…' : saved ? 'Saved' : 'Save'}
+            </button>
+            <button
+              className="btn-primary small"
+              type="button"
+              disabled={isSending || !contactEmail || !draft.trim()}
+              title={!contactEmail ? 'This contact has no email address on file.' : undefined}
+              onClick={() => handleSend(draft)}
+            >
+              {isSending ? 'Sending…' : sent ? 'Sent ✓' : 'Send'}
+            </button>
+          </div>
           {sendError && (
             <p className="hint mono" style={{ color: 'var(--rec)' }}>
               {sendError}
@@ -334,7 +373,7 @@ function EmailModal({
         <div className="modal-head">
           <span className="eyebrow">{label}</span>
           <button className="btn-ghost small" type="button" onClick={onClose}>
-            Close
+            ✕
           </button>
         </div>
         {children}

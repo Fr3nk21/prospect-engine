@@ -242,6 +242,7 @@ textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
 }
 .email-variant { display: flex; flex-direction: column; gap: 8px; }
 .email-variant-actions { display: flex; gap: 8px; }
+.email-preview { line-height: 1.5; min-height: 3.2em; }
 
 .modal-backdrop {
   position: fixed;

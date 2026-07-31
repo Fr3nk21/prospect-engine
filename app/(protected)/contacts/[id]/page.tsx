@@ -53,6 +53,14 @@ export default async function ContactDetailPage({
 
   const c = contact as ContactDetail
 
+  const sentVariants = Array.from(
+    new Set(
+      (events ?? [])
+        .filter((e) => e.type === 'email_sent' && e.email_variant)
+        .map((e) => e.email_variant as string)
+    )
+  )
+
   const screenshots: Screenshot[] = await Promise.all(
     (screenshotRows ?? []).map(async (row) => {
       const { data } = await supabase.storage
@@ -118,6 +126,7 @@ export default async function ContactDetailPage({
               email_warm: c.email_warm,
               email_followup: c.email_followup,
             }}
+            sentVariants={sentVariants}
             updateEmailVariant={updateEmailVariant}
             sendEmail={sendEmail}
           />

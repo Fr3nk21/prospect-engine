@@ -259,17 +259,18 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
     `SUPABASE_SERVICE_ROLE_KEY` (già in `.env.example`, ora anche in
     `.env.local`).
 
-## Modulo 4 (Gmail) — in corso
+## Modulo 4 (Gmail) — ✅ completato (task 4.1–4.3), test su contatto reale rimandato
 
 - Task 4.1 (OAuth interno) **✅ completato**. Consent screen Internal,
-  scope solo `gmail.send` (niente `gmail.readonly` per ora — servirà solo
-  al polling risposte, task 4.3, e richiederà un nuovo consenso). Flusso
-  one-shot: `app/api/auth/gmail/start/route.ts` reindirizza al consenso
-  Google (`prompt: 'consent'` per forzare un nuovo refresh_token anche se
-  l'account aveva già autorizzato l'app in passato), `app/api/auth/gmail/
-  callback/route.ts` scambia il code e mostra il refresh_token una tantum
-  da incollare in `GMAIL_REFRESH_TOKEN`. Refresh token ottenuto e salvato
-  in `.env.local` (da aggiungere anche su Vercel prima del deploy).
+  scope solo `gmail.send` (niente `gmail.readonly` per ora — servirebbe
+  solo per leggere le risposte, fuori scope attuale, e richiederebbe un
+  nuovo consenso). Flusso one-shot: `app/api/auth/gmail/start/route.ts`
+  reindirizza al consenso Google (`prompt: 'consent'` per forzare un
+  nuovo refresh_token anche se l'account aveva già autorizzato l'app in
+  passato), `app/api/auth/gmail/callback/route.ts` scambia il code e
+  mostra il refresh_token una tantum da incollare in
+  `GMAIL_REFRESH_TOKEN`. Refresh token ottenuto e salvato in
+  `.env.local` (da aggiungere anche su Vercel prima del deploy).
 - Task 4.2 (invio dall'app) **✅ completato e testato end-to-end** (email
   arrivata, Inviati su info@unfocus.com.au corretto, stato → Contacted,
   evento `email_sent` in cronologia col testo giusto).
@@ -282,10 +283,7 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
   invia, poi aggiorna `contacts.gmail_thread_id`/`gmail_message_id` e
   logga l'evento `email_sent` con la variante usata), bottone "Send" per
   variante in `components/analysis-panel.tsx` (con `window.confirm` prima
-  dell'invio — azione irreversibile e reale), più un bottone "Expand" che
-  apre la stessa textarea/Save/Send in un modal a schermo intero (stesso
-  state React, nessun draft separato: "Close"/backdrop/Escape chiudono il
-  modal ma non scartano le modifiche già digitate).
+  dell'invio — azione irreversibile e reale).
   - **Bug risolto durante il test**: l'header `Subject` veniva scritto
     raw (`Subject: ${subject}`), senza MIME encoding — un nome contatto
     con em dash ("TEST — Fuffa Restaurant") arrivava corrotto
@@ -300,29 +298,68 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
     - Subject dell'email: `{business_name} — quick thought` (niente
       "Hey" — quello resta solo nel saluto del corpo). Diventa
       `Re: {business_name} — quick thought` in automatico quando l'invio
-      è un follow-up in thread (vedi sotto).
+      è in thread (vedi threading sotto).
     - Lo stato passa a `Contacted` (il trigger DB logga da solo) **solo
       se era `To contact`** — un follow-up inviato mentre il contatto è
       già `In conversation`/`No reply` non deve retrocedere lo stato.
     - Se il contatto non ha `email` in anagrafica, il bottone "Send" è
       disabilitato (tooltip) invece di fallire silenziosamente.
-  - **Threading follow-up (rifinitura post-test, decisa con Francesco)**:
-    implementato. Problema: `gmail_thread_id` da solo non basta per far
-    apparire un'email nello stesso thread Gmail lato destinatario — serve
-    anche l'header RFC `Message-ID` del messaggio precedente da passare
-    come `In-Reply-To`/`References`. Legere quell'header via l'API
-    richiederebbe però lo scope `gmail.readonly` (deliberatamente non
-    richiesto — vedi task 4.1). Soluzione: `lib/gmail.ts` genera lui
-    stesso un `Message-ID` (`<uuid@unfocus.com.au>`) ad ogni invio, lo
-    imposta esplicitamente nell'header in uscita, e lo restituisce alla
-    server action, che lo salva in `contacts.gmail_message_id`
-    (`db/migration_005_gmail_message_id.sql`, **da eseguire su
-    Supabase** — colonna aggiunta anche in `db/schema.sql`). Al prossimo
-    invio per lo stesso contatto, se `gmail_message_id` è già valorizzato,
-    `sendGmailMessage` aggiunge `In-Reply-To`/`References` e il
-    `threadId` esistente, e il subject diventa `Re: ...` — quindi ora
-    **solo il primo invio per un contatto apre un nuovo thread**, tutti i
-    successivi (tipicamente il follow-up) rispondono in thread.
+- Task 4.3 (UI: modal per le email) **✅ completato e testato**. Le tre
+  textarea inline (troppo piccole per email di 60-80 parole) sono state
+  sostituite da un'anteprima troncata (~160 caratteri, read-only) più due
+  bottoni per variante: **Edit** (apre un modal a schermo intero) e
+  **Send / Sent ✓** (resta visibile anche fuori dal modal, come
+  indicatore di stato a colpo d'occhio). File:
+  `components/analysis-panel.tsx` (`EmailVariantEditor`/`EmailModal`).
+  - Il modal separa **draft** (testo in editing) da **savedValue**
+    (ultimo valore confermato persistito): `Cancel`/`✕`/backdrop/Escape
+    chiudono senza chiedere conferma se non ci sono modifiche, altrimenti
+    mostrano un `window.confirm` prima di scartarle. `Save` persiste il
+    draft su `contacts.email_*` e aggiorna `savedValue`.
+  - `Send` (sia dentro che fuori dal modal) invia il testo corrente; se
+    inviato dal modal senza un `Save` esplicito prima, il testo viene
+    comunque persistito su `contacts.email_*` subito dopo l'invio riuscito
+    — altrimenti un reload avrebbe mostrato testo diverso da quello
+    realmente spedito.
+  - **"Sent ✓" persistente tra reload**: non è più solo stato client
+    effimero — `app/(protected)/contacts/[id]/page.tsx` calcola
+    `sentVariants` dagli eventi `email_sent` già presenti in
+    `contact_events` e lo passa giù come prop.
+- **Threading follow-up** (rifinitura decisa con Francesco dopo il primo
+  test del 4.2) **✅ implementato, header verificati corretti — vedi nota
+  sotto sul limite del test di raggruppamento visivo**. Problema:
+  `gmail_thread_id` da solo non basta per far apparire un'email nello
+  stesso thread Gmail lato destinatario — serve anche l'header RFC
+  `Message-ID` del messaggio precedente da passare come
+  `In-Reply-To`/`References`. Leggere quell'header via l'API
+  richiederebbe però lo scope `gmail.readonly` (deliberatamente non
+  richiesto — vedi task 4.1). Soluzione: `lib/gmail.ts` genera lui
+  stesso un `Message-ID` (`<uuid@unfocus.com.au>`) ad ogni invio, lo
+  imposta esplicitamente nell'header in uscita, e lo restituisce alla
+  server action, che lo salva in `contacts.gmail_message_id`
+  (`db/migration_005_gmail_message_id.sql`, **eseguita su Supabase**
+  2026-07-31 — colonna aggiunta anche in `db/schema.sql`). Al prossimo
+  invio per lo stesso contatto, se `gmail_message_id` è già valorizzato
+  (a prescindere dalla variante — non è ristretto al solo `followup`),
+  `sendGmailMessage` aggiunge `In-Reply-To`/`References` e il `threadId`
+  esistente, e il subject diventa `Re: ...`.
+  - **Nota sul test (2026-07-31)**: verificato con "Mostra originale" in
+    Gmail che `In-Reply-To`/`References` sull'email di follow-up
+    puntano correttamente al `Message-ID` del primo invio — la parte
+    lato codice/header è corretta e confermata. Il raggruppamento
+    *visivo* in un'unica conversazione **non si è però verificato** nel
+    test (mittente info@unfocus.com.au, destinatario un altro indirizzo
+    Gmail): comportamento noto di Gmail, che a volte non raggruppa email
+    arrivate via API in scenari Gmail-to-Gmail anche con header corretti.
+    Su client non-Gmail, o con destinatari su server email diversi da
+    Google, il raggruppamento visivo è atteso funzionare normalmente,
+    perché segue lo standard RFC (che qui è rispettato). Non bloccante:
+    il codice è corretto, è un limite del test specifico, non della
+    implementazione.
+- Task 4.4 (polling risposte, da `docs/TASKS.md`) — non iniziato.
+- **Test su un contatto reale (prospect vero, non fittizio) rimandato a
+  un'altra sessione** — tutto il resto del modulo (OAuth, invio, modal,
+  threading) è stato validato con contatti di test.
 
 ## Development approach
 
