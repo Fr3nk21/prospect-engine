@@ -7,11 +7,12 @@ in Supabase `scrape_jobs` / `scrape_job_items` (service_role key, bypasses RLS).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
 import anthropic
-import requests
+import httpx
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
@@ -30,6 +31,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 SCRAPER_API_TOKEN = os.getenv("SCRAPER_API_TOKEN", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
+ENRICHMENT_CONCURRENCY = 8
 
 for name, value in [
     ("MAPS_API_KEY", MAPS_API_KEY),
@@ -120,6 +123,109 @@ def get_analysis_job(job_id: str) -> dict:
     return result.data
 
 
+def _mark_job_item(job_id: str, place_id: str, name: str | None, status: str, error: str | None) -> None:
+    supabase.table("scrape_job_items").upsert(
+        {"job_id": job_id, "place_id": place_id, "name": name, "status": status, "error": error}
+    ).execute()
+
+
+async def _enrich_candidates(
+    job_id: str,
+    location: str,
+    business_type: str,
+    candidates: list[dict],
+    processed: int,
+    new_contacts: int,
+    skipped: int,
+) -> tuple[int, int]:
+    """Runs website enrichment for `candidates` concurrently (semaphore-8 +
+    per-host lock, see scraper_core.scrape_website) and saves each contact
+    as soon as its own enrichment finishes — same processed/new_contacts
+    increments as the old sequential loop, just driven by completion order
+    instead of list order."""
+    sem = asyncio.Semaphore(ENRICHMENT_CONCURRENCY)
+    host_locks = sc.HostLocks()
+    counters = {"processed": processed, "new_contacts": new_contacts}
+    counters_lock = asyncio.Lock()
+
+    async def handle(client: httpx.AsyncClient, candidate: dict) -> None:
+        place_id = candidate["place_id"]
+        details = candidate["details"]
+        item_name = candidate["item_name"]
+        item_status, item_error = "pending", None
+
+        try:
+            website = details.get("websiteUri") or ""
+            email, instagram, _summary = ("", "", "")
+            if website:
+                async with sem:
+                    email, instagram, _summary = await sc.scrape_website(website, client, host_locks)
+
+            rating = details.get("rating")
+            review_count = details.get("userRatingCount")
+            category, is_new_venue = sc.categorize(rating, review_count)
+
+            address = details.get("formattedAddress", "")
+            parts = [p.strip() for p in address.split(",")]
+            suburb = parts[1] if len(parts) >= 2 else location
+
+            def save_contact() -> None:
+                inserted = (
+                    supabase.table("contacts")
+                    .insert(
+                        {
+                            "place_id": place_id,
+                            "name": item_name or "",
+                            "address": address or None,
+                            "suburb": suburb,
+                            "phone": details.get("internationalPhoneNumber") or None,
+                            "website": website or None,
+                            "email": email or None,
+                            "instagram": instagram or None,
+                            "business_type": business_type,
+                            "rating": rating,
+                            "review_count": review_count,
+                            "category": category,
+                            "is_new_venue": is_new_venue,
+                            "source": "scraper",
+                        }
+                    )
+                    .execute()
+                )
+                contact_id = inserted.data[0]["id"]
+                supabase.table("contact_events").insert(
+                    {
+                        "contact_id": contact_id,
+                        "type": "import",
+                        "body": f"Scraped from Google Maps — {location}, {business_type}",
+                    }
+                ).execute()
+
+            await asyncio.to_thread(save_contact)
+            item_status = "done"
+            async with counters_lock:
+                counters["new_contacts"] += 1
+        except Exception as exc:
+            log.warning("[job %s] error on place %s: %s", job_id, place_id, exc)
+            item_status = "error"
+            item_error = str(exc)
+
+        await asyncio.to_thread(_mark_job_item, job_id, place_id, item_name, item_status, item_error)
+
+        async with counters_lock:
+            counters["processed"] += 1
+            snapshot = {**counters, "skipped": skipped}
+
+        await asyncio.to_thread(
+            lambda: supabase.table("scrape_jobs").update(snapshot).eq("id", job_id).execute()
+        )
+
+    async with httpx.AsyncClient(headers=sc.SCRAPER_HEADERS) as client:
+        await asyncio.gather(*(handle(client, candidate) for candidate in candidates))
+
+    return counters["processed"], counters["new_contacts"]
+
+
 def run_scrape_job(job_id: str, location: str, business_type: str) -> None:
     try:
         supabase.table("scrape_jobs").update(
@@ -135,110 +241,70 @@ def run_scrape_job(job_id: str, location: str, business_type: str) -> None:
 
         supabase.table("scrape_jobs").update({"total": total}).eq("id", job_id).execute()
 
-        web_session = requests.Session()
-        web_session.headers.update(sc.SCRAPER_HEADERS)
-
         processed = new_contacts = skipped = 0
+        candidates: list[dict] = []
 
+        # Phase 1 — dedup / blocklist / Place Details. Cheap sequential calls,
+        # not the bottleneck, so this stays a plain for loop exactly as before.
         for place_id in place_ids:
-            item_status, item_error, item_name = "pending", None, None
-
             try:
                 existing = (
                     supabase.table("contacts").select("id").eq("place_id", place_id).limit(1).execute()
                 )
                 if existing.data:
-                    item_status = "skipped_duplicate"
+                    _mark_job_item(job_id, place_id, None, "skipped_duplicate", None)
                     skipped += 1
-                else:
-                    blocked = (
-                        supabase.table("blocklist").select("place_id").eq("place_id", place_id).limit(1).execute()
-                    )
-                    if blocked.data:
-                        item_status = "skipped_blocklist"
-                        skipped += 1
-                    else:
-                        details = sc.get_place_details(MAPS_API_KEY, place_id)
-                        item_name = details.get("displayName", {}).get("text")
+                    processed += 1
+                    supabase.table("scrape_jobs").update(
+                        {"processed": processed, "new_contacts": new_contacts, "skipped": skipped}
+                    ).eq("id", job_id).execute()
+                    continue
 
-                        business_status = details.get("businessStatus", "OPERATIONAL")
-                        if business_status != "OPERATIONAL":
-                            # Closed venue — not a real dedup/error case, so no
-                            # scrape_job_items row (schema has no status for it yet).
-                            log.info("[job %s] skipping closed venue %s (%s)", job_id, place_id, business_status)
-                            skipped += 1
-                            processed += 1
-                            supabase.table("scrape_jobs").update(
-                                {"processed": processed, "new_contacts": new_contacts, "skipped": skipped}
-                            ).eq("id", job_id).execute()
-                            continue
+                blocked = (
+                    supabase.table("blocklist").select("place_id").eq("place_id", place_id).limit(1).execute()
+                )
+                if blocked.data:
+                    _mark_job_item(job_id, place_id, None, "skipped_blocklist", None)
+                    skipped += 1
+                    processed += 1
+                    supabase.table("scrape_jobs").update(
+                        {"processed": processed, "new_contacts": new_contacts, "skipped": skipped}
+                    ).eq("id", job_id).execute()
+                    continue
 
-                        website = details.get("websiteUri") or ""
-                        email, instagram, _summary = ("", "", "")
-                        if website:
-                            email, instagram, _summary = sc.scrape_website(website, web_session)
+                details = sc.get_place_details(MAPS_API_KEY, place_id)
+                item_name = details.get("displayName", {}).get("text")
 
-                        rating = details.get("rating")
-                        review_count = details.get("userRatingCount")
-                        category, is_new_venue = sc.categorize(rating, review_count)
+                business_status = details.get("businessStatus", "OPERATIONAL")
+                if business_status != "OPERATIONAL":
+                    # Closed venue — not a real dedup/error case, so no
+                    # scrape_job_items row (schema has no status for it yet).
+                    log.info("[job %s] skipping closed venue %s (%s)", job_id, place_id, business_status)
+                    skipped += 1
+                    processed += 1
+                    supabase.table("scrape_jobs").update(
+                        {"processed": processed, "new_contacts": new_contacts, "skipped": skipped}
+                    ).eq("id", job_id).execute()
+                    continue
 
-                        address = details.get("formattedAddress", "")
-                        parts = [p.strip() for p in address.split(",")]
-                        suburb = parts[1] if len(parts) >= 2 else location
-
-                        inserted = (
-                            supabase.table("contacts")
-                            .insert(
-                                {
-                                    "place_id": place_id,
-                                    "name": item_name or "",
-                                    "address": address or None,
-                                    "suburb": suburb,
-                                    "phone": details.get("internationalPhoneNumber") or None,
-                                    "website": website or None,
-                                    "email": email or None,
-                                    "instagram": instagram or None,
-                                    "business_type": business_type,
-                                    "rating": rating,
-                                    "review_count": review_count,
-                                    "category": category,
-                                    "is_new_venue": is_new_venue,
-                                    "source": "scraper",
-                                }
-                            )
-                            .execute()
-                        )
-                        contact_id = inserted.data[0]["id"]
-
-                        supabase.table("contact_events").insert(
-                            {
-                                "contact_id": contact_id,
-                                "type": "import",
-                                "body": f"Scraped from Google Maps — {location}, {business_type}",
-                            }
-                        ).execute()
-
-                        item_status = "done"
-                        new_contacts += 1
+                candidates.append({"place_id": place_id, "details": details, "item_name": item_name})
             except Exception as exc:
                 log.warning("[job %s] error on place %s: %s", job_id, place_id, exc)
-                item_status = "error"
-                item_error = str(exc)
+                _mark_job_item(job_id, place_id, None, "error", str(exc))
+                processed += 1
+                supabase.table("scrape_jobs").update(
+                    {"processed": processed, "new_contacts": new_contacts, "skipped": skipped}
+                ).eq("id", job_id).execute()
 
-            supabase.table("scrape_job_items").upsert(
-                {
-                    "job_id": job_id,
-                    "place_id": place_id,
-                    "name": item_name,
-                    "status": item_status,
-                    "error": item_error,
-                }
-            ).execute()
-
-            processed += 1
-            supabase.table("scrape_jobs").update(
-                {"processed": processed, "new_contacts": new_contacts, "skipped": skipped}
-            ).eq("id", job_id).execute()
+        # Phase 2 — website enrichment, concurrency 8 with a per-host lock
+        # (see scraper_core.HostLocks / scrape_website). Runs in its own
+        # asyncio loop; run_scrape_job itself stays a plain sync function
+        # because FastAPI's BackgroundTasks executes sync callables in a
+        # worker thread, which has no event loop of its own — asyncio.run()
+        # here does not clash with the request-handling loop.
+        processed, new_contacts = asyncio.run(
+            _enrich_candidates(job_id, location, business_type, candidates, processed, new_contacts, skipped)
+        )
 
         supabase.table("scrape_jobs").update(
             {"status": "completed", "finished_at": "now"}

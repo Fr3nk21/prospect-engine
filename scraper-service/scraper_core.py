@@ -14,15 +14,15 @@ only for candidates that survive the dedup/blocklist check.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 import re
+import ssl
 import time
 import urllib.parse
-import warnings
 
 import httpx
-import requests
 from bs4 import BeautifulSoup
 
 log = logging.getLogger("scraper_core")
@@ -36,7 +36,10 @@ PLACES_API_BASE = "https://places.googleapis.com/v1"
 
 # IDs only for search — cheapest Places API (New) SKU. Full details are
 # fetched per-candidate only after dedup/blocklist filtering (see main.py).
-SEARCH_FIELD_MASK = "places.id"
+# nextPageToken is a top-level field, not nested under places.* — omitting
+# it from the mask silently strips it from every response even when more
+# pages exist, which was the actual cause of scrapes always stopping at 20.
+SEARCH_FIELD_MASK = "places.id,nextPageToken"
 
 DETAILS_FIELD_MASK = (
     "id,displayName,formattedAddress,internationalPhoneNumber,"
@@ -101,9 +104,14 @@ def text_search(api_key: str, query: str) -> list[str]:
                 break
 
             data = resp.json()
-            place_ids.extend(p["id"] for p in data.get("places", []) if p.get("id"))
+            page_ids = [p["id"] for p in data.get("places", []) if p.get("id")]
+            place_ids.extend(page_ids)
 
             token = data.get("nextPageToken")
+            log.info(
+                "Places Text Search '%s': +%d results (%d so far), next page: %s",
+                query, len(page_ids), len(place_ids), bool(token),
+            )
             if not token:
                 break
             time.sleep(PAGINATION_DELAY)
@@ -144,20 +152,40 @@ def categorize(rating: float | None, review_count: int | None) -> tuple[str, boo
     return category, is_new_venue
 
 
-# ---------- Website crawler ----------
+# ---------- Website crawler (async, concurrency 8 + per-host lock — see main.py) ----------
 
-def fetch_page(url: str, session: requests.Session) -> BeautifulSoup | None:
+class HostLocks:
+    """One asyncio.Lock per hostname, created lazily.
+
+    Guarantees at most one in-flight request per target host across all
+    concurrent enrichment tasks, independent of the global concurrency-8
+    semaphore (which only caps how many *different* hosts are hit at once).
+    """
+
+    def __init__(self) -> None:
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._guard = asyncio.Lock()
+
+    async def acquire(self, host: str) -> asyncio.Lock:
+        async with self._guard:
+            if host not in self._locks:
+                self._locks[host] = asyncio.Lock()
+            return self._locks[host]
+
+
+async def fetch_page(url: str, client: httpx.AsyncClient) -> BeautifulSoup | None:
     try:
-        resp = session.get(url, timeout=WEBSITE_TIMEOUT, allow_redirects=True)
+        resp = await client.get(url, timeout=WEBSITE_TIMEOUT, follow_redirects=True)
         resp.raise_for_status()
         if "text/html" not in resp.headers.get("Content-Type", ""):
             return None
         return BeautifulSoup(resp.text, "html.parser")
-    except requests.exceptions.SSLError:
+    except httpx.ConnectError as exc:
+        if not isinstance(exc.__cause__, ssl.SSLError):
+            return None
         try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                resp = session.get(url, timeout=WEBSITE_TIMEOUT, allow_redirects=True, verify=False)
+            async with httpx.AsyncClient(headers=SCRAPER_HEADERS, verify=False) as insecure_client:
+                resp = await insecure_client.get(url, timeout=WEBSITE_TIMEOUT, follow_redirects=True)
                 resp.raise_for_status()
                 return BeautifulSoup(resp.text, "html.parser")
         except Exception:
@@ -224,46 +252,59 @@ def find_contact_links(soup: BeautifulSoup, base_url: str) -> list[str]:
     return candidates
 
 
-def scrape_website(website_url: str, session: requests.Session) -> tuple[str, str, str]:
-    """Returns (email, instagram_url, website_summary)."""
+async def scrape_website(
+    website_url: str, client: httpx.AsyncClient, host_locks: HostLocks
+) -> tuple[str, str, str]:
+    """Returns (email, instagram_url, website_summary).
+
+    Fetches for a single business run under a per-host lock, so this
+    coroutine never overlaps with another one hitting the same hostname —
+    the random delay between fetches (anti rate-limiting on the target
+    site) stays scoped to that host, it does not throttle unrelated hosts
+    running concurrently under the caller's semaphore.
+    """
     if not website_url.startswith(("http://", "https://")):
         website_url = "https://" + website_url
 
-    soup = fetch_page(website_url, session)
-    if soup is None:
-        return "", "", ""
+    host = urllib.parse.urlparse(website_url).netloc
+    lock = await host_locks.acquire(host)
 
-    email = next(iter(extract_emails(soup)), "")
-    instagram = extract_instagram(soup)
-    summary = extract_website_summary(soup)
+    async with lock:
+        soup = await fetch_page(website_url, client)
+        if soup is None:
+            return "", "", ""
 
-    if email and instagram:
-        return email, instagram, summary
+        email = next(iter(extract_emails(soup)), "")
+        instagram = extract_instagram(soup)
+        summary = extract_website_summary(soup)
 
-    for link in find_contact_links(soup, website_url)[:3]:
-        time.sleep(random.uniform(WEBSITE_DELAY_MIN, WEBSITE_DELAY_MAX))
-        page = fetch_page(link, session)
-        if page is None:
-            continue
-        if not email:
-            email = next(iter(extract_emails(page)), "")
-        if not instagram:
-            instagram = extract_instagram(page)
         if email and instagram:
             return email, instagram, summary
 
-    parsed = urllib.parse.urlparse(website_url)
-    base = f"{parsed.scheme}://{parsed.netloc}"
-    for path in CONTACT_PAGE_PATHS:
-        if email and instagram:
-            break
-        time.sleep(random.uniform(WEBSITE_DELAY_MIN, WEBSITE_DELAY_MAX))
-        page = fetch_page(base + path, session)
-        if page is None:
-            continue
-        if not email:
-            email = next(iter(extract_emails(page)), "")
-        if not instagram:
-            instagram = extract_instagram(page)
+        for link in find_contact_links(soup, website_url)[:3]:
+            await asyncio.sleep(random.uniform(WEBSITE_DELAY_MIN, WEBSITE_DELAY_MAX))
+            page = await fetch_page(link, client)
+            if page is None:
+                continue
+            if not email:
+                email = next(iter(extract_emails(page)), "")
+            if not instagram:
+                instagram = extract_instagram(page)
+            if email and instagram:
+                return email, instagram, summary
 
-    return email, instagram, summary
+        parsed = urllib.parse.urlparse(website_url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        for path in CONTACT_PAGE_PATHS:
+            if email and instagram:
+                break
+            await asyncio.sleep(random.uniform(WEBSITE_DELAY_MIN, WEBSITE_DELAY_MAX))
+            page = await fetch_page(base + path, client)
+            if page is None:
+                continue
+            if not email:
+                email = next(iter(extract_emails(page)), "")
+            if not instagram:
+                instagram = extract_instagram(page)
+
+        return email, instagram, summary
