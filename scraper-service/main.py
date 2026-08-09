@@ -166,8 +166,10 @@ async def _enrich_candidates(
             category, is_new_venue = sc.categorize(rating, review_count)
 
             address = details.get("formattedAddress", "")
-            parts = [p.strip() for p in address.split(",")]
-            suburb = parts[1] if len(parts) >= 2 else location
+            # suburb = the search location entered in the scrape form, not a
+            # piece of the business's own street address — that's what
+            # "1 Martin Pl" / "21/31 Hall St" leaking into it were.
+            suburb = location
 
             def save_contact() -> None:
                 inserted = (

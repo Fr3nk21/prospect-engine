@@ -1,9 +1,17 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { sendGmailMessage } from '@/lib/gmail'
+import { deleteContactsById } from '@/lib/delete-contacts'
 import type { EmailVariant } from '@/lib/contacts'
+
+export async function deleteContact(contactId: string) {
+  await deleteContactsById([contactId])
+  revalidatePath('/contacts')
+  redirect('/contacts')
+}
 
 export async function updateContactStatus(contactId: string, newStatus: string) {
   const supabase = await createClient()

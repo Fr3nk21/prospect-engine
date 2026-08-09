@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import ContactsFilterBar from '@/components/contacts-filter-bar'
 import PageSizeSelect from '@/components/page-size-select'
-import ContactRow from '@/components/contact-row'
+import ContactsTable from '@/components/contacts-table'
 import ScrapePanel from '@/components/scrape-panel'
 import { PAGE_SIZES, SORT_COLUMNS, type ContactListItem, type SortColumn } from '@/lib/contacts'
 
@@ -23,6 +23,7 @@ export default async function ContactsPage({
   const category = sp.category ?? 'All'
   const status = sp.status ?? 'All'
   const type = sp.type ?? 'All'
+  const city = sp.city ?? 'All'
   const from = sp.from ?? ''
   const to = sp.to ?? ''
   const sort: SortColumn = isSortColumn(sp.sort) ? sp.sort : 'name'
@@ -45,6 +46,7 @@ export default async function ContactsPage({
   if (category !== 'All') query = query.eq('category', category)
   if (status !== 'All') query = query.eq('status', status)
   if (type !== 'All') query = query.eq('business_type', type)
+  if (city !== 'All') query = query.eq('suburb', city)
   if (from) query = query.gte('last_contact_date', from)
   if (to) query = query.lte('last_contact_date', to)
 
@@ -54,15 +56,22 @@ export default async function ContactsPage({
   const rangeTo = rangeFrom + pageSize - 1
   query = query.range(rangeFrom, rangeTo)
 
-  const [{ data: contacts, count: filteredCount }, { count: totalCount }, { count: toContactCount }, { data: typeRows }] =
-    await Promise.all([
-      query,
-      supabase.from('contacts').select('id', { count: 'exact', head: true }),
-      supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('status', 'To contact'),
-      supabase.from('contacts').select('business_type').not('business_type', 'is', null),
-    ])
+  const [
+    { data: contacts, count: filteredCount },
+    { count: totalCount },
+    { count: toContactCount },
+    { data: typeRows },
+    { data: suburbRows },
+  ] = await Promise.all([
+    query,
+    supabase.from('contacts').select('id', { count: 'exact', head: true }),
+    supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('status', 'To contact'),
+    supabase.from('contacts').select('business_type').not('business_type', 'is', null),
+    supabase.from('contacts').select('suburb').not('suburb', 'is', null),
+  ])
 
   const types = Array.from(new Set((typeRows ?? []).map((r) => r.business_type as string))).sort()
+  const cities = Array.from(new Set((suburbRows ?? []).map((r) => r.suburb as string))).sort()
 
   const rows = (contacts ?? []) as ContactListItem[]
   const total = filteredCount ?? 0
@@ -106,11 +115,12 @@ export default async function ContactsPage({
           </div>
         </div>
 
-        <ContactsFilterBar types={types} />
+        <ContactsFilterBar types={types} cities={cities} />
 
-        <table className="contacts">
-          <thead>
-            <tr>
+        <ContactsTable
+          rows={rows}
+          headerCells={
+            <>
               {(Object.keys(SORT_COLUMNS) as SortColumn[]).map((column) => (
                 <th
                   key={column}
@@ -122,21 +132,9 @@ export default async function ContactsPage({
                   </Link>
                 </th>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => (
-              <ContactRow key={c.id} contact={c} />
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="empty">
-                  No contacts match these filters. Try widening them.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </>
+          }
+        />
 
         <div className="pager">
           <PageSizeSelect current={pageSize} />

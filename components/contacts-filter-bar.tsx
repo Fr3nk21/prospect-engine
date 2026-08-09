@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { CATEGORIES, STATUSES } from '@/lib/contacts'
 
-export default function ContactsFilterBar({ types }: { types: string[] }) {
+export default function ContactsFilterBar({ types, cities }: { types: string[]; cities: string[] }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -36,10 +36,13 @@ export default function ContactsFilterBar({ types }: { types: string[] }) {
   const category = searchParams.get('category') ?? 'All'
   const status = searchParams.get('status') ?? 'All'
   const type = searchParams.get('type') ?? 'All'
+  const city = searchParams.get('city') ?? 'All'
   const from = searchParams.get('from') ?? ''
   const to = searchParams.get('to') ?? ''
 
-  const filtersActive = Boolean(search || category !== 'All' || status !== 'All' || type !== 'All' || from || to)
+  const filtersActive = Boolean(
+    search || category !== 'All' || status !== 'All' || type !== 'All' || city !== 'All' || from || to
+  )
 
   return (
     <div className="filter-bar">
@@ -70,6 +73,14 @@ export default function ContactsFilterBar({ types }: { types: string[] }) {
         {types.map((t) => (
           <option key={t} value={t}>
             {t}
+          </option>
+        ))}
+      </select>
+      <select value={city} onChange={(e) => updateParams({ city: e.target.value })}>
+        <option value="All">City: all</option>
+        {cities.map((c) => (
+          <option key={c} value={c}>
+            {c}
           </option>
         ))}
       </select>

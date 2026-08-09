@@ -119,26 +119,33 @@ replies and statuses.
   `scraper-service/railway.json`, `app/api/scrape/route.ts`,
   `components/scrape-panel.tsx`.
 
-⚠️ **Debito tecnico noto, non bloccante**: il task 2.3 di `docs/TASKS.md`
-("Enrichment parallelo", httpx + asyncio concorrenza ~8) **non è
-implementato** — `scraper_core.scrape_website` è tuttora sincrono con
-`requests`, un sito alla volta, con delay casuali di 2–5s tra i fetch
-(homepage + fino a 3 link "contact" trovati + fino a 10 path standard tipo
-`/contact`, `/about`, ecc.).
+✅ **Debito tecnico del task 2.3 saldato**: `scraper_core.scrape_website` e
+`fetch_page` sono ora async (`httpx.AsyncClient`); `main.py` divide
+`run_scrape_job` in due fasi — fase 1 sequenziale (dedup/blocklist/Place
+Details, invariata), fase 2 (`_enrich_candidates`) fa l'enrichment con
+`asyncio.Semaphore(8)` + `scraper_core.HostLocks` (un `asyncio.Lock` per
+hostname, creato al volo) così nessun host target viene mai colpito da più
+di una richiesta contemporanea, indipendentemente dalla concorrenza-8
+globale. Il delay casuale 2-5s anti rate-limiting resta scoped al singolo
+host (dentro il lock), non è diventato globale. `run_scrape_job` resta una
+funzione sync (FastAPI esegue le `BackgroundTasks` sync in un thread
+separato via `run_in_threadpool`, senza loop già attivo) e lancia la fase 2
+con `asyncio.run(...)` — verificato che non dà "event loop already
+running". `processed`/`scrape_jobs` si aggiornano non appena il singolo
+contatto completa il proprio enrichment (ordine di completamento, non
+ordine di lista) — stesso comportamento osservabile di prima, solo più
+rapido. Testato dal vivo: host diversi girano in parallelo, stesso host
+si serializza correttamente.
 
-Impatto pratico stimato (in base al target dichiarato nello stesso task —
-"200 contatti in ~15 minuti invece di 90" — quindi ~27s/contatto in
-sincrono contro ~4.5s/contatto in parallelo a concorrenza 8):
-
-| Risultati scrape | Sincrono (attuale) | Parallelo (concorrenza 8, da fare) |
-|---|---|---|
-| 50  | ~20–25 min | ~4 min |
-| 100 | ~40–45 min | ~7–8 min |
-
-Sotto i ~30-40 risultati per ricerca la differenza è tollerabile per un
-uso manuale (avvii lo scrape e fai altro). Da risolvere prima di lanciare
-scrape ricorrenti su aree grandi (100+ risultati attesi) o se si vuole
-incolonnare più ricerche in sequenza.
+✅ **Bug risolto — Text Search si fermava sempre a 20 risultati**: non era
+un problema del ciclo di paginazione (già corretto: `while True`, sleep
+2s, retry con `pageToken`, stop quando il token manca) ma di
+`SEARCH_FIELD_MASK = "places.id"` — `nextPageToken` è un campo top-level
+(non annidato sotto `places`) e le Places API (New) lo stripano sempre
+dalla risposta se non è esplicitamente nel field mask, anche quando
+esistono altre pagine. Fix: `SEARCH_FIELD_MASK = "places.id,nextPageToken"`.
+Verificato dal vivo: una query con >20 risultati ora recupera le 3 pagine
+(60 risultati, il cap naturale di Google) invece di fermarsi alla prima.
 
 Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
 `docs/TASKS.md`.
@@ -360,6 +367,60 @@ Prossimo: Modulo 3 (Analisi Claude e generazione email) — vedi
 - **Test su un contatto reale (prospect vero, non fittizio) rimandato a
   un'altra sessione** — tutto il resto del modulo (OAuth, invio, modal,
   threading) è stato validato con contatti di test.
+
+## Gestione contatti — eliminazione e filtro città — ✅ completato e testato
+
+Feature non legate a un modulo di `docs/TASKS.md` (manutenzione/UI di
+supporto sulla lista contatti).
+
+- **Eliminazione contatti (singola e bulk)**: logica condivisa in
+  `lib/delete-contacts.ts` (`deleteContactsById`), usata sia da
+  `app/(protected)/contacts/actions.ts` (`deleteContacts`, bulk, bottone
+  "Delete selected" nella lista) sia da `[id]/actions.ts` (`deleteContact`,
+  singolo, con `redirect('/contacts')` dopo l'eliminazione). Rimuove prima
+  i file screenshot dallo Storage (le righe `contact_events`/
+  `screenshots`/`analysis_jobs` sono già `on delete cascade` in
+  `db/schema.sql`, ma i file nel bucket non lo sono — andrebbero persi
+  come orfani senza questa rimozione esplicita), poi elimina la riga
+  `contacts`.
+  - **Decisione presa dopo il primo test**: l'eliminazione **non** tocca
+    mai `blocklist`, né per i contatti con `place_id` né per quelli senza.
+    La blocklist resta riservata esclusivamente allo stato
+    `Not interested` (già gestita lì via `updateContactStatus` in
+    `[id]/actions.ts`). Motivo: eliminare è per pulizia dati/test/errori,
+    e deve permettere a un prossimo scrape della stessa zona di far
+    ricomparire il contatto; per bloccarlo in modo permanente si passa
+    prima da "Not interested".
+  - UI: `components/contacts-table.tsx` (client — stato di selezione,
+    checkbox "select all", barra "Delete selected" visibile solo con
+    ≥1 selezionato, `window.confirm` prima di eliminare, poi
+    `revalidatePath('/contacts')` per aggiornare lista/conteggio senza
+    reload completo), `components/contact-row.tsx` (checkbox per riga,
+    `stopPropagation` per non attivare la navigazione al dettaglio),
+    `components/delete-contact-button.tsx` (bottone nel dettaglio, stesso
+    pattern di conferma).
+- **Filtro "City"**: nuovo query param `city` in
+  `app/(protected)/contacts/page.tsx` (`eq('suburb', city)`), select
+  popolata dinamicamente dai valori distinti di `suburb` presenti in
+  `contacts` (nessun valore hardcoded), opzione default "All cities".
+  Stesso pattern degli altri filtri in `components/contacts-filter-bar.tsx`
+  (query params via `router.push`, sopravvive al reload, resetta la
+  paginazione, incluso nel calcolo di "Clear filters"). Nessuna migration
+  necessaria — `suburb` esisteva già.
+- **Bug scoperto testando il filtro e risolto**: `suburb` veniva popolato
+  dallo scraper con un pezzo dell'indirizzo del singolo locale
+  (`formattedAddress.split(',')[1]` — es. "1 Martin Pl",
+  "Abbotsford VIC 3067" vs "Abbotsford VIC 3121" per lo stesso quartiere)
+  invece che dalla location cercata (`scrape_jobs.location`, es.
+  "Sydney, NSW, Australia", "Richmond, VIC"). Fix per i nuovi inserimenti
+  in `scraper-service/main.py` (`_enrich_candidates.handle`): `suburb =
+  location`. Dati storici corretti con `db/migration_006_backfill_suburb.sql`
+  (**eseguita su Supabase** — `UPDATE contacts SET suburb = scrape_jobs.location`
+  via join `scrape_job_items.place_id = contacts.place_id` filtrato su
+  `status = 'done'`, per evitare match su righe `skipped_duplicate` di
+  scrape successivi sullo stesso place_id). Contatti `sheet_import`/
+  `manual` (senza `place_id`/job associato) non entrano nel join — lasciati
+  invariati come richiesto.
 
 ## Development approach
 

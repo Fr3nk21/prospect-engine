@@ -7,6 +7,7 @@ import NoteForm from '@/components/note-form'
 import Timeline from '@/components/timeline'
 import ScreenshotUpload from '@/components/screenshot-upload'
 import AnalysisPanel from '@/components/analysis-panel'
+import DeleteContactButton from '@/components/delete-contact-button'
 import { instagramUrl, type ContactDetail, type ContactEvent, type Screenshot } from '@/lib/contacts'
 import {
   updateContactStatus,
@@ -15,6 +16,7 @@ import {
   deleteScreenshot,
   updateEmailVariant,
   sendEmail,
+  deleteContact,
 } from './actions'
 
 const SIGNED_URL_TTL_SECONDS = 3600
@@ -168,6 +170,14 @@ export default async function ContactDetailPage({
                 <dd>{c.last_contact_date ?? '—'}</dd>
               </div>
             </dl>
+          </section>
+
+          <section className="panel">
+            <DeleteContactButton
+              contactId={c.id}
+              contactName={c.name}
+              deleteContact={deleteContact}
+            />
           </section>
         </aside>
       </div>

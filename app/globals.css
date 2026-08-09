@@ -197,6 +197,20 @@ textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
 .btn-ghost:disabled { opacity: .4; cursor: default; }
 .btn-ghost.small { padding: 6px 12px; font-size: 12.5px; }
 .btn-ghost.disabled { opacity: .4; cursor: default; pointer-events: none; }
+.btn-danger {
+  background: none;
+  border: 1px solid var(--rec);
+  color: var(--rec);
+  border-radius: 7px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--rec) 12%, transparent); }
+.btn-danger:disabled { opacity: .4; cursor: default; }
+.btn-danger.small { padding: 6px 12px; font-size: 12.5px; }
+.btn-danger.wide { width: 100%; }
 
 /* ---------- Scrape section ---------- */
 .scrape-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 14px; align-items: end; }
@@ -279,6 +293,17 @@ textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
 }
 .list-count { font-size: 15px; }
 
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--rec) 8%, var(--panel-up));
+  border: 1px solid color-mix(in srgb, var(--rec) 30%, transparent);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -315,6 +340,8 @@ table.contacts { width: 100%; border-collapse: collapse; }
 .contacts td { padding: 13px 12px; border-bottom: 1px solid var(--line-soft); }
 .contacts tbody tr { cursor: pointer; transition: background .12s; }
 .contacts tbody tr:hover { background: var(--panel-up); }
+.checkbox-col { width: 34px; padding-right: 0 !important; cursor: default; }
+.checkbox-col input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
 .biz-name { font-weight: 600; }
 .biz-sub { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
 .empty { text-align: center; color: var(--text-dim); padding: 32px 0 !important; }
