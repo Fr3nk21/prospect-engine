@@ -479,6 +479,61 @@ eseguita su Supabase, test end-to-end su contatto reale rimandato
   `db/migration_007_unsubscribe_recontact.sql`, `middleware.ts`,
   `lib/contacts.ts`, `components/contact-badges.tsx`.
 
+## Task E — Normalizzazione business_type — ✅ completato
+
+`contacts.business_type` veniva popolato con la stringa di ricerca
+digitata nel form di scrape (es. "restaurant"), non con i tag tecnici di
+Google — comunque poco leggibile/consistente come filtro se la query
+digitata varia. Aggiunto `types` a `DETAILS_FIELD_MASK` in
+`scraper_core.py` (Place Details ora richiede anche l'array `types[]`) e
+un dizionario `GOOGLE_TYPE_LABELS` (~60 voci, es. `restaurant` →
+"Restaurant", `beauty_salon` → "Beauty Salon") che esclude di proposito i
+tag generici (`point_of_interest`, `establishment`, `food`, `store`) così
+un tag più specifico più avanti nell'array vince comunque.
+`normalize_business_type(types, fallback)` (approvato da Francesco prima
+dell'implementazione) scorre `types[]` nell'ordine restituito da Google e
+ritorna la prima etichetta riconosciuta; se nessuna corrisponde, fallback
+= **la query di ricerca digitata nel form** (non il primo tag grezzo —
+scelta esplicita di Francesco: sempre leggibile anche quando non precisa).
+Applicato in `main.py` (`_enrich_candidates.handle`) al momento
+dell'insert in `contacts`. Nessuna migration — non tocca lo schema, solo
+dati nuovi (i contatti già scrapati restano con la stringa vecchia,
+nessun backfill richiesto).
+
+## Task F — Contesto di settore configurabile per l'analisi Claude Vision
+— ✅ completato
+
+Il `SYSTEM_PROMPT` di `scraper-service/prospect_vision.py` era hardcoded
+su hospitality. Estratta la sola frase di contesto settore in una nuova
+chiave settings `analysis_context` (`db/migration_008_analysis_context.sql`
+— **eseguita su Supabase**), default identico byte-per-byte al testo
+prima hardcoded ("a videography and photography studio in Melbourne
+specialising in hospitality content") così le analisi esistenti non
+cambiano finché non viene modificato dalla UI.
+- `prospect_vision.py`: `SYSTEM_PROMPT` è diventato `SYSTEM_PROMPT_TEMPLATE`
+  (placeholder `{analysis_context}`), `build_system_prompt(analysis_context)`
+  fa il format con fallback su `DEFAULT_ANALYSIS_CONTEXT` se il valore è
+  vuoto/None. `analyze()` accetta un parametro opzionale `analysis_context`.
+- **Decisione architetturale**: la lettura da Supabase resta in `main.py`
+  (`run_analysis_job`, che già possiede il client Supabase), non dentro
+  `prospect_vision.py` — quel file resta puro (nessuna dipendenza da
+  Supabase), coerente con il suo stesso commento in testa ("Used by the
+  /analyze background job in main.py"). `main.py` legge la chiave
+  `analysis_context` a ogni job di analisi e la passa a `pv.analyze(...)`.
+- **UI**: nuova pagina `/settings` (`app/(protected)/settings/page.tsx` +
+  `actions.ts`) con un textarea per leggere/modificare `analysis_context`
+  senza toccare codice — così il tool si può ripuntare su un altro
+  settore (barbershop, cleaning company, ecc.) semplicemente cambiando
+  questo testo. Link "Settings" aggiunto in `components/topbar.tsx`.
+- Nota: il prompt caching (`cache_control: ephemeral`) resta valido dato
+  che il testo del system prompt è identico per tutte le analisi finché
+  `analysis_context` non viene cambiato dalla UI.
+- File chiave: `scraper-service/scraper_core.py`, `scraper-service/main.py`,
+  `scraper-service/prospect_vision.py`,
+  `db/migration_008_analysis_context.sql`,
+  `app/(protected)/settings/page.tsx`, `app/(protected)/settings/actions.ts`,
+  `components/topbar.tsx`.
+
 ## Development approach
 
 Work module by module, end-to-end, testing before moving on (see /docs/TASKS.md).

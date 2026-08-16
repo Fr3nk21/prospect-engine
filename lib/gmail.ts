@@ -8,20 +8,42 @@ import { generateUnsubscribeToken } from '@/lib/unsubscribe-token'
 const FROM_ADDRESS = 'info@unfocus.com.au'
 
 const SIGNATURE = [
-  '--',
   'Francesco Bugugnoli',
   'Visual Content Partner',
   '0476 278 891',
   'UnFocus - Strategic video content',
-].join('\r\n')
+].join('\n')
 
-// Required by the Australian Spam Act 2003 on every commercial email.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+// Plain text (with \n line breaks) -> HTML, preserving line breaks.
+function textToHtml(value: string): string {
+  return escapeHtml(value).replace(/\n/g, '<br>')
+}
+
+// HTML body: the plain-text body + signature, plus a required (Spam Act
+// 2003) unsubscribe link as a readable "click here" instead of a raw URL.
 // Stateless: the token encodes the contact id, so there's no unsubscribe
 // table to keep in sync.
-function buildUnsubscribeFooter(contactId: string): string {
+function buildHtmlBody(body: string, contactId: string): string {
   const token = generateUnsubscribeToken(contactId)
   const url = `${process.env.NEXT_PUBLIC_APP_URL}/api/unsubscribe?token=${encodeURIComponent(token)}`
-  return `To unsubscribe: ${url}`
+
+  return [
+    `<div style="font-family: sans-serif; font-size: 14px; color: #1a1a1a;">`,
+    textToHtml(body),
+    '<br><br>',
+    '--<br>',
+    textToHtml(SIGNATURE),
+    '<br><br>',
+    `<span style="font-size: 12px; color: #888;">If you'd rather not receive further emails from us, <a href="${url}">click here</a> to unsubscribe.</span>`,
+    '</div>',
+  ].join('\n')
 }
 
 async function getAccessToken(): Promise<string> {
@@ -94,10 +116,9 @@ function buildRawMessage({
   if (inReplyTo) {
     headers.push(`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`)
   }
-  headers.push('Content-Type: text/plain; charset="UTF-8"')
+  headers.push('Content-Type: text/html; charset="UTF-8"')
 
-  const fullBody = `${body}\r\n\r\n${SIGNATURE}\r\n\r\n${buildUnsubscribeFooter(contactId)}`
-  const message = [...headers, '', fullBody].join('\r\n')
+  const message = [...headers, '', buildHtmlBody(body, contactId)].join('\r\n')
   return base64UrlEncode(message)
 }
 

@@ -164,6 +164,7 @@ async def _enrich_candidates(
             rating = details.get("rating")
             review_count = details.get("userRatingCount")
             category, is_new_venue = sc.categorize(rating, review_count)
+            place_type = sc.normalize_business_type(details.get("types"), business_type)
 
             address = details.get("formattedAddress", "")
             # suburb = the search location entered in the scrape form, not a
@@ -184,7 +185,7 @@ async def _enrich_candidates(
                             "website": website or None,
                             "email": email or None,
                             "instagram": instagram or None,
-                            "business_type": business_type,
+                            "business_type": place_type,
                             "rating": rating,
                             "review_count": review_count,
                             "category": category,
@@ -350,7 +351,16 @@ def run_analysis_job(job_id: str, contact_id: str) -> None:
             for row in rows
         ]
 
-        result = pv.analyze(anthropic_client, contact, screenshots)
+        analysis_context = (
+            supabase.table("settings")
+            .select("value")
+            .eq("key", "analysis_context")
+            .single()
+            .execute()
+        ).data
+        analysis_context = analysis_context["value"] if analysis_context else None
+
+        result = pv.analyze(anthropic_client, contact, screenshots, analysis_context)
 
         dimensions = result.get("dimensions", [])
         total_max = sum(d.get("max", 0) for d in dimensions) or 100

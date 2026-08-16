@@ -156,7 +156,9 @@ create table settings (
 insert into settings (key, value) values
   ('status_reset_months', '6'),        -- "No reply" → "To contact" after N months
   ('screenshot_ttl_days', '5'),
-  ('recontact_months', '9');           -- "Not interested" → "To recontact" after N months (unless unsubscribed)
+  ('recontact_months', '9'),           -- "Not interested" → "To recontact" after N months (unless unsubscribed)
+  ('analysis_context', '"a videography and photography studio in Melbourne specialising in hospitality content"');
+                                       -- sector description injected into prospect_vision.SYSTEM_PROMPT
 
 -- ============================================================
 -- ROW LEVEL SECURITY

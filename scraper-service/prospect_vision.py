@@ -23,7 +23,13 @@ MEDIA_TYPES = {
     "webp": "image/webp",
 }
 
-SYSTEM_PROMPT = """You are a digital marketing consultant for UnFocus, a videography and photography studio in Melbourne specialising in hospitality content.
+# Sector description sentence — overridable via the `analysis_context`
+# settings key (edited from the Settings page in the UI) so the tool can be
+# retargeted at a different industry (barbershop, cleaning company, ...)
+# without a code change. This default matches what was hardcoded before.
+DEFAULT_ANALYSIS_CONTEXT = "a videography and photography studio in Melbourne specialising in hospitality content"
+
+SYSTEM_PROMPT_TEMPLATE = """You are a digital marketing consultant for UnFocus, {analysis_context}.
 
 You will receive Instagram screenshots of a venue plus some business context. Analyse the screenshots and produce a scored breakdown and three outreach emails.
 
@@ -72,6 +78,10 @@ Respond ONLY with valid JSON, no markdown fences, matching exactly:
 }"""
 
 
+def build_system_prompt(analysis_context: str | None) -> str:
+    return SYSTEM_PROMPT_TEMPLATE.format(analysis_context=analysis_context or DEFAULT_ANALYSIS_CONTEXT)
+
+
 def _media_type(storage_path: str) -> str:
     ext = storage_path.rsplit(".", 1)[-1].lower()
     return MEDIA_TYPES.get(ext, "image/jpeg")
@@ -114,6 +124,7 @@ def analyze(
     client: anthropic.Anthropic,
     contact: dict,
     screenshots: list[tuple[str, bytes]],
+    analysis_context: str | None = None,
 ) -> dict:
     """screenshots: list of (storage_path, raw_bytes), newest-safe order doesn't matter."""
     content = []
@@ -136,7 +147,13 @@ def analyze(
     response = client.messages.create(
         model=MODEL,
         max_tokens=3000,
-        system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+        system=[
+            {
+                "type": "text",
+                "text": build_system_prompt(analysis_context),
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
         messages=[{"role": "user", "content": content}],
     )
 

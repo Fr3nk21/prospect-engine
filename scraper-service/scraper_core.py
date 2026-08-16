@@ -43,8 +43,75 @@ SEARCH_FIELD_MASK = "places.id,nextPageToken"
 
 DETAILS_FIELD_MASK = (
     "id,displayName,formattedAddress,internationalPhoneNumber,"
-    "websiteUri,rating,userRatingCount,businessStatus"
+    "websiteUri,rating,userRatingCount,businessStatus,types"
 )
+
+# Google Places `types` -> readable label for the business_type filter in the
+# UI. Deliberately excludes generic/noise types (point_of_interest,
+# establishment, food, store) so a more specific type elsewhere in the list
+# wins instead of matching on those first.
+GOOGLE_TYPE_LABELS: dict[str, str] = {
+    "restaurant": "Restaurant",
+    "cafe": "Cafe",
+    "bar": "Bar",
+    "bakery": "Bakery",
+    "meal_takeaway": "Takeaway",
+    "meal_delivery": "Food Delivery",
+    "night_club": "Night Club",
+    "liquor_store": "Liquor Store",
+    "beauty_salon": "Beauty Salon",
+    "hair_care": "Hair Salon",
+    "barber_shop": "Barbershop",
+    "nail_salon": "Nail Salon",
+    "spa": "Spa",
+    "gym": "Gym",
+    "yoga_studio": "Yoga Studio",
+    "hotel": "Hotel",
+    "lodging": "Accommodation",
+    "real_estate_agency": "Real Estate Agency",
+    "clothing_store": "Clothing Store",
+    "jewelry_store": "Jewelry Store",
+    "florist": "Florist",
+    "pet_store": "Pet Store",
+    "veterinary_care": "Veterinary Clinic",
+    "dentist": "Dentist",
+    "doctor": "Medical Clinic",
+    "physiotherapist": "Physiotherapy",
+    "lawyer": "Law Firm",
+    "accounting": "Accounting Firm",
+    "insurance_agency": "Insurance Agency",
+    "car_dealer": "Car Dealer",
+    "car_repair": "Auto Repair",
+    "car_wash": "Car Wash",
+    "plumber": "Plumber",
+    "electrician": "Electrician",
+    "roofing_contractor": "Roofing Contractor",
+    "general_contractor": "Building Contractor",
+    "moving_company": "Moving Company",
+    "storage": "Storage Facility",
+    "travel_agency": "Travel Agency",
+    "tourist_attraction": "Tourist Attraction",
+    "museum": "Museum",
+    "art_gallery": "Art Gallery",
+    "movie_theater": "Cinema",
+    "bowling_alley": "Bowling Alley",
+    "amusement_park": "Amusement Park",
+    "casino": "Casino",
+    "supermarket": "Supermarket",
+    "convenience_store": "Convenience Store",
+    "shopping_mall": "Shopping Mall",
+    "book_store": "Book Store",
+    "furniture_store": "Furniture Store",
+    "home_goods_store": "Home Goods Store",
+    "hardware_store": "Hardware Store",
+    "electronics_store": "Electronics Store",
+    "bicycle_store": "Bike Shop",
+    "shoe_store": "Shoe Store",
+    "department_store": "Department Store",
+    "school": "School",
+    "child_care_agency": "Childcare",
+    "university": "University",
+}
 
 CONTACT_PAGE_PATHS = [
     "/contact", "/contact-us", "/contact_us", "/contactus",
@@ -150,6 +217,19 @@ def categorize(rating: float | None, review_count: int | None) -> tuple[str, boo
 
     is_new_venue = rating >= 4.5 and 10 <= review_count <= 100
     return category, is_new_venue
+
+
+def normalize_business_type(types: list[str] | None, fallback: str) -> str:
+    """Maps Google Places `types` to a readable label using the first
+    recognized entry, in the order Google returned them (more specific
+    types are usually listed before generic ones). Falls back to the
+    business_type the search was run with if nothing in `types` matches —
+    never returns null."""
+    for google_type in types or []:
+        label = GOOGLE_TYPE_LABELS.get(google_type)
+        if label:
+            return label
+    return fallback
 
 
 # ---------- Website crawler (async, concurrency 8 + per-host lock — see main.py) ----------

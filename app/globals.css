@@ -163,6 +163,8 @@ button:focus-visible {
 }
 textarea { resize: vertical; line-height: 1.6; font-size: 13.5px; }
 
+.settings-form { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; align-items: flex-start; }
+
 /* ---------- Buttons ---------- */
 .btn-primary {
   background: var(--accent);

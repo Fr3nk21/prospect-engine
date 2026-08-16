@@ -33,6 +33,9 @@ export default function Topbar() {
         Prospect Engine
       </Link>
       <div className="topbar-right">
+        <Link href="/settings" className="btn-ghost small">
+          Settings
+        </Link>
         <button
           className="btn-ghost small theme-toggle"
           onClick={() => applyTheme(theme === 'dark' ? 'light' : 'dark')}
