@@ -422,6 +422,63 @@ supporto sulla lista contatti).
   `manual` (senza `place_id`/job associato) non entrano nel join — lasciati
   invariati come richiesto.
 
+## Firma email automatica — ✅ completato
+
+Ogni email inviata da `lib/gmail.ts` include in fondo, dopo il corpo, una
+firma hardcoded (nessun nuovo scope OAuth necessario):
+
+```
+--
+Francesco Bugugnoli
+Visual Content Partner
+0476 278 891
+UnFocus - Strategic video content
+```
+
+Appesa in `buildRawMessage` (separata dal corpo da una riga vuota + `--`
+su riga propria, convenzione standard email), senza toccare `body` a
+monte — `contacts.email_*` e la history in `contact_events` restano il
+testo "puro" scritto/generato, senza firma/footer incorporati.
+
+## Unsubscribe (Spam Act 2003) + re-engagement — ✅ completato, migration
+eseguita su Supabase, test end-to-end su contatto reale rimandato
+
+- **Unsubscribe**: `contacts.unsubscribed_at` (timestamptz, nullable,
+  `db/migration_007_unsubscribe_recontact.sql` — **eseguita su Supabase**).
+  Ogni email include, dopo la firma, un link
+  `{NEXT_PUBLIC_APP_URL}/api/unsubscribe?token=...`. Il token è stateless
+  (`lib/unsubscribe-token.ts`): `contactId.HMAC-SHA256(contactId)`, chiave
+  `CRON_SECRET` (stesso secret già usato per i cron, nessuna tabella
+  extra). `app/api/unsubscribe/route.ts` (pubblica, esclusa dall'auth
+  check in `middleware.ts` insieme a `api/cron`, stesso motivo: nessuna
+  sessione Supabase disponibile per chi clicca da un client email)
+  verifica il token, setta `unsubscribed_at=now()` e `status='Not
+  interested'`, aggiunge il `place_id` in `blocklist` (stessa regola di
+  dominio già applicata al "Not interested" manuale — vedi sezione
+  "Gestione contatti"), mostra una pagina HTML di conferma semplice.
+  Nuova env var `NEXT_PUBLIC_APP_URL` (base URL pubblico, no trailing
+  slash — aggiunta in `.env.local` e su Vercel).
+- **Re-engagement**: nuovo status `'To recontact'` aggiunto al check
+  constraint di `contacts.status` e a `STATUSES`
+  (`lib/contacts.ts` — compare da solo nel filtro Status della lista
+  contatti). Nuova chiave settings `recontact_months` (default 9).
+  `app/api/cron/recontact/route.ts` (bearer `CRON_SECRET`, stesso
+  pattern di `cleanup-screenshots`), schedulato daily alle 4:00 in
+  `vercel.json` (sfalsato di un'ora dal cleanup screenshot delle 3:00):
+  sposta a `'To recontact'` i contatti con `status='Not interested'`,
+  `unsubscribed_at IS NULL` e `last_contact_date` più vecchio di
+  `recontact_months` mesi. **Chi ha fatto unsubscribe non viene mai
+  toccato**, a prescindere da quanto tempo sia passato — è un opt-out
+  esplicito, non un semplice "non interessato" temporaneo.
+  - Il trigger `trg_contacts_status` già esistente logga da solo lo
+    `status_change` e aggiorna `last_contact_date` a `current_date` anche
+    per questa transizione — comportamento coerente con tutte le altre
+    modifiche di stato, nessuna eccezione necessaria nel codice del cron.
+- File chiave: `lib/gmail.ts`, `lib/unsubscribe-token.ts`,
+  `app/api/unsubscribe/route.ts`, `app/api/cron/recontact/route.ts`,
+  `db/migration_007_unsubscribe_recontact.sql`, `middleware.ts`,
+  `lib/contacts.ts`, `components/contact-badges.tsx`.
+
 ## Development approach
 
 Work module by module, end-to-end, testing before moving on (see /docs/TASKS.md).

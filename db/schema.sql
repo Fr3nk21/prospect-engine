@@ -21,8 +21,9 @@ create table contacts (
                     check (category in ('High','Medium','Low')),
   is_new_venue      boolean not null default false,   -- rating >= 4.5 and 10-100 reviews; orthogonal to category
   status            text not null default 'To contact'
-                    check (status in ('To contact','Contacted','No reply','In conversation','Not interested')),
+                    check (status in ('To contact','Contacted','No reply','In conversation','Not interested','To recontact')),
   last_contact_date date,
+  unsubscribed_at   timestamptz,        -- set by /api/unsubscribe; recontact cron must never touch these rows
 
   -- Claude analysis (persisted even after screenshots are deleted)
   priority_score    integer check (priority_score between 1 and 10),
@@ -154,7 +155,8 @@ create table settings (
 
 insert into settings (key, value) values
   ('status_reset_months', '6'),        -- "No reply" → "To contact" after N months
-  ('screenshot_ttl_days', '5');
+  ('screenshot_ttl_days', '5'),
+  ('recontact_months', '9');           -- "Not interested" → "To recontact" after N months (unless unsubscribed)
 
 -- ============================================================
 -- ROW LEVEL SECURITY

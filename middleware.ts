@@ -52,6 +52,9 @@ export const config = {
     // api/cron/* is excluded: cron invocations carry no Supabase session
     // cookie, so the redirect-to-/login logic above would otherwise block
     // Vercel Cron before the route handler's own bearer-token check runs.
-    '/((?!_next/static|_next/image|favicon.ico|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // api/unsubscribe is excluded too: recipients click this link from their
+    // inbox with no Supabase session — it must stay publicly reachable and
+    // do its own token verification instead.
+    '/((?!_next/static|_next/image|favicon.ico|api/cron|api/unsubscribe|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

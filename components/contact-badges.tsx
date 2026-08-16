@@ -4,6 +4,7 @@ const STATUS_COLOR: Record<string, string> = {
   'No reply': '#DE9B3B',
   'In conversation': '#4CAF6E',
   'Not interested': '#D95F4E',
+  'To recontact': '#9B7ED6',
 }
 
 const CATEGORY_COLOR: Record<string, string> = {

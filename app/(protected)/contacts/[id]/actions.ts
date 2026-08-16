@@ -124,6 +124,7 @@ export async function sendEmail(
       body: trimmedBody,
       threadId: contact.gmail_message_id ? contact.gmail_thread_id ?? undefined : undefined,
       inReplyTo: contact.gmail_message_id ?? undefined,
+      contactId,
     })
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Could not send the email.' }

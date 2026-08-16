@@ -4,6 +4,7 @@ export const STATUSES = [
   'No reply',
   'In conversation',
   'Not interested',
+  'To recontact',
 ] as const
 
 export const CATEGORIES = ['High', 'Medium', 'Low'] as const

@@ -3,8 +3,26 @@
 // a separate OAuth re-consent).
 
 import { randomUUID } from 'node:crypto'
+import { generateUnsubscribeToken } from '@/lib/unsubscribe-token'
 
 const FROM_ADDRESS = 'info@unfocus.com.au'
+
+const SIGNATURE = [
+  '--',
+  'Francesco Bugugnoli',
+  'Visual Content Partner',
+  '0476 278 891',
+  'UnFocus - Strategic video content',
+].join('\r\n')
+
+// Required by the Australian Spam Act 2003 on every commercial email.
+// Stateless: the token encodes the contact id, so there's no unsubscribe
+// table to keep in sync.
+function buildUnsubscribeFooter(contactId: string): string {
+  const token = generateUnsubscribeToken(contactId)
+  const url = `${process.env.NEXT_PUBLIC_APP_URL}/api/unsubscribe?token=${encodeURIComponent(token)}`
+  return `To unsubscribe: ${url}`
+}
 
 async function getAccessToken(): Promise<string> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -58,12 +76,14 @@ function buildRawMessage({
   body,
   messageId,
   inReplyTo,
+  contactId,
 }: {
   to: string
   subject: string
   body: string
   messageId: string
   inReplyTo?: string
+  contactId: string
 }): string {
   const headers = [
     `From: ${FROM_ADDRESS}`,
@@ -76,7 +96,8 @@ function buildRawMessage({
   }
   headers.push('Content-Type: text/plain; charset="UTF-8"')
 
-  const message = [...headers, '', body].join('\r\n')
+  const fullBody = `${body}\r\n\r\n${SIGNATURE}\r\n\r\n${buildUnsubscribeFooter(contactId)}`
+  const message = [...headers, '', fullBody].join('\r\n')
   return base64UrlEncode(message)
 }
 
@@ -86,6 +107,7 @@ export async function sendGmailMessage({
   body,
   threadId,
   inReplyTo,
+  contactId,
 }: {
   to: string
   subject: string
@@ -94,6 +116,7 @@ export async function sendGmailMessage({
   // instead of starting a new conversation. Omit both for a first send.
   threadId?: string
   inReplyTo?: string
+  contactId: string
 }): Promise<{ id: string; threadId: string; messageId: string }> {
   const accessToken = await getAccessToken()
   const messageId = generateMessageId()
@@ -103,6 +126,7 @@ export async function sendGmailMessage({
     body,
     messageId,
     inReplyTo,
+    contactId,
   })
 
   const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
