@@ -422,7 +422,7 @@ supporto sulla lista contatti).
   `manual` (senza `place_id`/job associato) non entrano nel join — lasciati
   invariati come richiesto.
 
-## Firma email automatica — ✅ completato
+## Task A — Firma email automatica — ✅ completato e testato in produzione
 
 Ogni email inviata da `lib/gmail.ts` include in fondo, dopo il corpo, una
 firma hardcoded (nessun nuovo scope OAuth necessario):
@@ -440,8 +440,10 @@ su riga propria, convenzione standard email), senza toccare `body` a
 monte — `contacts.email_*` e la history in `contact_events` restano il
 testo "puro" scritto/generato, senza firma/footer incorporati.
 
-## Unsubscribe (Spam Act 2003) + re-engagement — ✅ completato, migration
-eseguita su Supabase, test end-to-end su contatto reale rimandato
+## Task B — Unsubscribe (Spam Act 2003) + re-engagement — ✅ completato e
+testato in produzione (migration 007 eseguita su Supabase, link
+unsubscribe HTML "click here" invece di URL grezzo — vedi anche sezione
+email HTML più sotto)
 
 - **Unsubscribe**: `contacts.unsubscribed_at` (timestamptz, nullable,
   `db/migration_007_unsubscribe_recontact.sql` — **eseguita su Supabase**).
@@ -474,12 +476,19 @@ eseguita su Supabase, test end-to-end su contatto reale rimandato
     `status_change` e aggiorna `last_contact_date` a `current_date` anche
     per questa transizione — comportamento coerente con tutte le altre
     modifiche di stato, nessuna eccezione necessaria nel codice del cron.
+- **Rifinitura estetica**: il link di unsubscribe mostrava l'URL grezzo
+  per intero. `lib/gmail.ts` ora invia l'email come `text/html` (non più
+  `text/plain` — necessario perché un `<a>` cliccabile non funziona in
+  plain text), corpo e firma escapati in HTML con newline convertiti in
+  `<br>`, link reso come testo leggibile ("...click here to
+  unsubscribe.") invece dell'URL.
 - File chiave: `lib/gmail.ts`, `lib/unsubscribe-token.ts`,
   `app/api/unsubscribe/route.ts`, `app/api/cron/recontact/route.ts`,
   `db/migration_007_unsubscribe_recontact.sql`, `middleware.ts`,
   `lib/contacts.ts`, `components/contact-badges.tsx`.
 
-## Task E — Normalizzazione business_type — ✅ completato
+## Task E — Normalizzazione business_type — ✅ completato e testato in
+produzione (Railway)
 
 `contacts.business_type` veniva popolato con la stringa di ricerca
 digitata nel form di scrape (es. "restaurant"), non con i tag tecnici di
@@ -501,7 +510,8 @@ dati nuovi (i contatti già scrapati restano con la stringa vecchia,
 nessun backfill richiesto).
 
 ## Task F — Contesto di settore configurabile per l'analisi Claude Vision
-— ✅ completato
+— ✅ completato e testato in produzione (migration 008 eseguita su
+Supabase, campo Settings verificato dal vivo)
 
 Il `SYSTEM_PROMPT` di `scraper-service/prospect_vision.py` era hardcoded
 su hospitality. Estratta la sola frase di contesto settore in una nuova
