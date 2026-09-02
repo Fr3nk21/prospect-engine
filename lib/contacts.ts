@@ -6,11 +6,8 @@ export const STATUSES = [
   'Not interested',
   'To recontact',
 ] as const
-
 export const CATEGORIES = ['High', 'Medium', 'Low'] as const
-
 export const PAGE_SIZES = [5, 10, 25] as const
-
 export const SORT_COLUMNS = {
   name: 'Business',
   category: 'Category',
@@ -18,9 +15,7 @@ export const SORT_COLUMNS = {
   status: 'Status',
   last_contact_date: 'Last contact',
 } as const
-
 export type SortColumn = keyof typeof SORT_COLUMNS
-
 export type ContactListItem = {
   id: string
   name: string
@@ -32,8 +27,9 @@ export type ContactListItem = {
   is_new_venue: boolean
   status: string
   last_contact_date: string | null
+  has_screenshots: boolean
+  instagram_score: number | null  // total_score from score_breakdown, null if no analysis
 }
-
 export type ScoreDimension = {
   key: string
   label: string
@@ -41,16 +37,13 @@ export type ScoreDimension = {
   score: number
   note: string
 }
-
 export type ScoreBreakdown = {
   dimensions: ScoreDimension[]
   total_score: number
   total_max: number
   has_videographer: 'yes' | 'no' | 'unclear'
 }
-
 export type EmailVariant = 'email_technical' | 'email_warm' | 'email_followup'
-
 export type AnalysisJob = {
   id: string
   contact_id: string
@@ -59,7 +52,6 @@ export type AnalysisJob = {
   started_at: string | null
   finished_at: string | null
 }
-
 export type ContactDetail = {
   id: string
   place_id: string | null
@@ -85,7 +77,6 @@ export type ContactDetail = {
   email_warm: string | null
   email_followup: string | null
 }
-
 export type ScrapeJob = {
   id: string
   location: string
@@ -99,7 +90,6 @@ export type ScrapeJob = {
   started_at: string | null
   finished_at: string | null
 }
-
 export type Screenshot = {
   id: string
   contact_id: string
@@ -107,7 +97,6 @@ export type Screenshot = {
   created_at: string
   url: string
 }
-
 export type ContactEvent = {
   id: string
   contact_id: string
@@ -118,13 +107,11 @@ export type ContactEvent = {
   body: string | null
   created_at: string
 }
-
 export function instagramUrl(value: string): string {
   const handle = value.trim().replace(/^@/, '')
   if (/^https?:\/\//i.test(handle)) return handle
   return `https://instagram.com/${handle.replace(/^instagram\.com\//i, '')}`
 }
-
 export const HISTORY_ICON: Record<ContactEvent['type'], string> = {
   status_change: '⇄',
   note: '✎',

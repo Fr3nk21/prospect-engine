@@ -138,11 +138,6 @@ async def _enrich_candidates(
     new_contacts: int,
     skipped: int,
 ) -> tuple[int, int]:
-    """Runs website enrichment for `candidates` concurrently (semaphore-8 +
-    per-host lock, see scraper_core.scrape_website) and saves each contact
-    as soon as its own enrichment finishes — same processed/new_contacts
-    increments as the old sequential loop, just driven by completion order
-    instead of list order."""
     sem = asyncio.Semaphore(ENRICHMENT_CONCURRENCY)
     host_locks = sc.HostLocks()
     counters = {"processed": processed, "new_contacts": new_contacts}
@@ -167,9 +162,6 @@ async def _enrich_candidates(
             place_type = sc.normalize_business_type(details.get("types"), business_type)
 
             address = details.get("formattedAddress", "")
-            # suburb = the search location entered in the scrape form, not a
-            # piece of the business's own street address — that's what
-            # "1 Martin Pl" / "21/31 Hall St" leaking into it were.
             suburb = location
 
             def save_contact() -> None:
@@ -188,7 +180,7 @@ async def _enrich_candidates(
                             "business_type": place_type,
                             "rating": rating,
                             "review_count": review_count,
-                            "category": category,
+                            "category": "Not analysed",
                             "is_new_venue": is_new_venue,
                             "source": "scraper",
                         }
@@ -247,8 +239,6 @@ def run_scrape_job(job_id: str, location: str, business_type: str) -> None:
         processed = new_contacts = skipped = 0
         candidates: list[dict] = []
 
-        # Phase 1 — dedup / blocklist / Place Details. Cheap sequential calls,
-        # not the bottleneck, so this stays a plain for loop exactly as before.
         for place_id in place_ids:
             try:
                 existing = (
@@ -280,8 +270,6 @@ def run_scrape_job(job_id: str, location: str, business_type: str) -> None:
 
                 business_status = details.get("businessStatus", "OPERATIONAL")
                 if business_status != "OPERATIONAL":
-                    # Closed venue — not a real dedup/error case, so no
-                    # scrape_job_items row (schema has no status for it yet).
                     log.info("[job %s] skipping closed venue %s (%s)", job_id, place_id, business_status)
                     skipped += 1
                     processed += 1
@@ -299,12 +287,6 @@ def run_scrape_job(job_id: str, location: str, business_type: str) -> None:
                     {"processed": processed, "new_contacts": new_contacts, "skipped": skipped}
                 ).eq("id", job_id).execute()
 
-        # Phase 2 — website enrichment, concurrency 8 with a per-host lock
-        # (see scraper_core.HostLocks / scrape_website). Runs in its own
-        # asyncio loop; run_scrape_job itself stays a plain sync function
-        # because FastAPI's BackgroundTasks executes sync callables in a
-        # worker thread, which has no event loop of its own — asyncio.run()
-        # here does not clash with the request-handling loop.
         processed, new_contacts = asyncio.run(
             _enrich_candidates(job_id, location, business_type, candidates, processed, new_contacts, skipped)
         )
@@ -367,8 +349,17 @@ def run_analysis_job(job_id: str, contact_id: str) -> None:
         total_score = result.get("total_score", sum(d.get("score", 0) for d in dimensions))
         priority_score = max(1, min(10, round(total_score / total_max * 10)))
 
+        # Categoria basata sullo score Instagram, non sui dati Google
+        if total_score >= 65:
+            ig_category = "High"
+        elif total_score >= 40:
+            ig_category = "Medium"
+        else:
+            ig_category = "Low"
+
         supabase.table("contacts").update(
             {
+                "category": ig_category,
                 "analysis": result.get("summary", ""),
                 "score_breakdown": {
                     "dimensions": dimensions,

@@ -1,5 +1,4 @@
 'use client'
-
 import { useRouter } from 'next/navigation'
 import { CategoryTag, NewVenueBadge, StatusDot, Rating } from '@/components/contact-badges'
 import type { ContactListItem } from '@/lib/contacts'
@@ -14,7 +13,6 @@ export default function ContactRow({
   onToggleSelect: () => void
 }) {
   const router = useRouter()
-
   return (
     <tr onClick={() => router.push(`/contacts/${contact.id}`)}>
       <td className="checkbox-col" onClick={(e) => e.stopPropagation()}>
@@ -43,6 +41,15 @@ export default function ContactRow({
         <StatusDot value={contact.status} />
       </td>
       <td className="right mono dim">{contact.last_contact_date ?? '—'}</td>
+      <td className="center mono ig-status-cell">
+        {contact.has_screenshots || contact.instagram_score !== null ? (
+          <span title={contact.instagram_score !== null ? `Instagram score: ${contact.instagram_score}/100` : 'Screenshots uploaded'}>
+            📷{contact.instagram_score !== null ? ` ${contact.instagram_score}` : ''}
+          </span>
+        ) : (
+          <span className="dim">—</span>
+        )}
+      </td>
     </tr>
   )
 }

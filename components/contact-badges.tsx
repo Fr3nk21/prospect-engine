@@ -15,9 +15,10 @@ const CATEGORY_COLOR: Record<string, string> = {
 
 export function CategoryTag({ value }: { value: string }) {
   const color = CATEGORY_COLOR[value] ?? '#8A919E'
+  const label = value === 'Not analysed' ? 'Not analysed' : value
   return (
     <span className="cat-tag" style={{ color, borderColor: color + '55', background: color + '1A' }}>
-      {value}
+      {label}
     </span>
   )
 }

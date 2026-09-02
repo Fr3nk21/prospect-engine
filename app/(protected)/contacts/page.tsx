@@ -62,18 +62,67 @@ export default async function ContactsPage({
     { count: toContactCount },
     { data: typeRows },
     { data: suburbRows },
+    { data: screenshotRows },
+    { data: analysisRows },
   ] = await Promise.all([
     query,
     supabase.from('contacts').select('id', { count: 'exact', head: true }),
     supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('status', 'To contact'),
     supabase.from('contacts').select('business_type').not('business_type', 'is', null),
     supabase.from('contacts').select('suburb').not('suburb', 'is', null),
+    // contact_ids that have at least one screenshot
+    supabase.from('screenshots').select('contact_id'),
+    // completed analyses with the total_score extracted from score_breakdown JSON
+    supabase
+      .from('analysis_jobs')
+      .select('contact_id')
+      .eq('status', 'completed'),
   ])
 
   const types = Array.from(new Set((typeRows ?? []).map((r) => r.business_type as string))).sort()
   const cities = Array.from(new Set((suburbRows ?? []).map((r) => r.suburb as string))).sort()
 
-  const rows = (contacts ?? []) as ContactListItem[]
+  // Build sets/maps for O(1) lookup per row
+  const contactsWithScreenshots = new Set((screenshotRows ?? []).map((r) => r.contact_id as string))
+  const analysedContactIds = new Set((analysisRows ?? []).map((r) => r.contact_id as string))
+
+  // For contacts that have a completed analysis, fetch the instagram score
+  // directly from the contacts table (score_breakdown->total_score)
+  let scoreMap = new Map<string, number>()
+  if (analysedContactIds.size > 0) {
+    const ids = Array.from(analysedContactIds)
+    const { data: scoreRows } = await supabase
+      .from('contacts')
+      .select('id, score_breakdown')
+      .in('id', ids)
+      .not('score_breakdown', 'is', null)
+
+    for (const row of scoreRows ?? []) {
+      const sb = row.score_breakdown as { total_score?: number } | null
+      if (sb?.total_score != null) {
+        scoreMap.set(row.id, sb.total_score)
+      }
+    }
+  }
+
+  const rows: ContactListItem[] = (contacts ?? []).map((c) => {
+  const id = c.id as string
+  return {
+    id,
+    name: c.name as string,
+    suburb: c.suburb as string | null,
+    business_type: c.business_type as string | null,
+    rating: c.rating as number | null,
+    review_count: c.review_count as number | null,
+    category: c.category as string,
+    is_new_venue: c.is_new_venue as boolean,
+    status: c.status as string,
+    last_contact_date: c.last_contact_date as string | null,
+    has_screenshots: contactsWithScreenshots.has(id),
+    instagram_score: scoreMap.get(id) ?? null,
+  }
+})
+
   const total = filteredCount ?? 0
   const pages = Math.max(1, Math.ceil(total / pageSize))
   const safePage = Math.min(page, pages - 1)
@@ -132,6 +181,7 @@ export default async function ContactsPage({
                   </Link>
                 </th>
               ))}
+              <th className="center">IG</th>
             </>
           }
         />

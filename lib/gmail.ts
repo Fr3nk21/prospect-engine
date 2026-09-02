@@ -9,9 +9,9 @@ const FROM_ADDRESS = 'info@unfocus.com.au'
 
 const SIGNATURE = [
   'Francesco Bugugnoli',
-  'Visual Content Partner',
+  'Videographer & Photographer',
   '0476 278 891',
-  'UnFocus - Strategic video content',
+  'unfocus.com.au',
 ].join('\n')
 
 function escapeHtml(value: string): string {
