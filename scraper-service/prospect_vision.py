@@ -33,23 +33,24 @@ SYSTEM_PROMPT_TEMPLATE = """You are a digital marketing consultant for UnFocus, 
 
 You will receive Instagram screenshots of a venue plus some business context. Analyse the screenshots and produce a scored breakdown and three outreach emails.
 
-SCORING — six dimensions, explain each with one sentence:
-- visual_quality (max 20): photo/video quality — professional or phone snapshots?
+SCORING, six dimensions, explain each with one sentence:
+- visual_quality (max 20): photo/video quality, professional or phone snapshots?
 - content_consistency (max 20): cohesive visual style/brand, or random?
-- video_presence (max 20): Reels/video content and quality — KEY, this is what we sell
+- video_presence (max 20): Reels/video content and quality, KEY, this is what we sell
 - posting_frequency (max 15): how often, gaps, active or dormant
 - engagement_signals (max 10): comments/likes visible
 - bio_profile (max 15): professional bio, highlights, contact info
 
-EMAIL PHILOSOPHY (applies to all three variants — same substance, different register):
-- First person, honest and human tone — not salesy
-- Prove you actually looked: reference something SPECIFIC seen in the screenshots
-  (a dish, an event, the interior, a reel) — never a generic observation
+EMAIL PHILOSOPHY (applies to all three variants, same substance, different register):
+- Write like a real business owner emailing another business owner: professional, direct, warm. Short sentences, plain language. No marketing hype, no filler adjectives, no clichés. It must read as a genuine note from one professional to another, never as a template.
+- Never use em dashes (—) or en dashes (–) anywhere in the email. Use commas, full stops, or split into two sentences instead.
+- First person, honest and human tone, not salesy
+- Prove you actually looked: reference something SPECIFIC seen in the screenshots (a dish, an event, the interior, a reel), never a generic observation
 - One honest note on what's working or missing, tied to 1-2 concrete video/photo ideas
-- Greeting "Hey [business name]", sign-off "Cheers, Francesco"
-- CTA: "Curious if this resonates?" or a natural equivalent
-- No bullets, no bold, no emoji, no generic adjectives ("stunning", "amazing"),
-  no artificial urgency, nothing that could be copy-pasted onto any other business
+- Greeting: "Hey [business name]"
+- Sign-off must be exactly two lines: "Cheers," alone on the first line, then "Francesco" alone on the line below (use a real line break between them)
+- CTA: end with a low-friction, concrete next step tied to the observation made earlier in the email. Style example: "Want me to put together a couple of quick ideas for [business name]?" Never end with a vague question about feelings or interest (avoid phrasing like "does this resonate").
+- No bullets, no bold, no emoji, no generic adjectives ("stunning", "amazing"), no artificial urgency, nothing that could be copy-pasted onto any other business
 
 - email_technical: opens more directly with the observation + suggestion.
   Fits structured/corporate-feeling businesses. Max ~120 words.
@@ -87,9 +88,20 @@ def _media_type(storage_path: str) -> str:
     return MEDIA_TYPES.get(ext, "image/jpeg")
 
 
+def _strip_dashes(text: str) -> str:
+    """Deterministic safety net: the prompt tells the model not to use em/en
+    dashes, but that's probabilistic. Strip any that slip through before the
+    email is saved, since a long dash is one of the clearest AI tells."""
+    if not text:
+        return text
+    text = text.replace(" — ", ", ").replace("—", ", ")
+    text = text.replace(" – ", "-").replace("–", "-")
+    return text
+
+
 def _parse_json_response(raw_text: str) -> dict:
     """Claude is asked for raw JSON but sometimes wraps it in a ```json fence
-    or adds a sentence before/after anyway — non-deterministic, seen in
+    or adds a sentence before/after anyway, non-deterministic, seen in
     production. Strip fences if present, then fall back to slicing between
     the first '{' and the last '}' before giving up."""
     text = raw_text.strip()
@@ -158,4 +170,8 @@ def analyze(
     )
 
     raw_text = response.content[0].text
-    return _parse_json_response(raw_text)
+    result = _parse_json_response(raw_text)
+    for field in ("email_technical", "email_warm", "email_followup"):
+        if field in result:
+            result[field] = _strip_dashes(result[field])
+    return result
