@@ -79,7 +79,7 @@ Respond ONLY with valid JSON, no markdown fences, matching exactly:
 
 
 def build_system_prompt(analysis_context: str | None) -> str:
-    return SYSTEM_PROMPT_TEMPLATE.format(analysis_context=analysis_context or DEFAULT_ANALYSIS_CONTEXT)
+    return SYSTEM_PROMPT_TEMPLATE.replace("{analysis_context}", analysis_context or DEFAULT_ANALYSIS_CONTEXT)
 
 
 def _media_type(storage_path: str) -> str:
