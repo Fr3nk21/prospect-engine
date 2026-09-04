@@ -8,6 +8,7 @@ in Supabase `scrape_jobs` / `scrape_job_items` (service_role key, bypasses RLS).
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 
@@ -123,6 +124,26 @@ def get_analysis_job(job_id: str) -> dict:
     return result.data
 
 
+def _load_scoring_config() -> dict:
+    """Reads the `scoring_config` settings row. Works whether settings.value
+    is stored as jsonb (returns a dict) or as text (returns a JSON string we
+    parse). Falls back to the hardcoded defaults if the row is missing or
+    malformed, so a bad/empty settings row can never break an analysis."""
+    try:
+        rows = (
+            supabase.table("settings").select("value").eq("key", "scoring_config").limit(1).execute()
+        ).data
+        if not rows:
+            return pv.DEFAULT_SCORING_CONFIG
+        value = rows[0]["value"]
+        if isinstance(value, str):
+            value = json.loads(value)
+        return value or pv.DEFAULT_SCORING_CONFIG
+    except Exception as exc:
+        log.warning("scoring_config load failed, using defaults: %s", exc)
+        return pv.DEFAULT_SCORING_CONFIG
+
+
 def _mark_job_item(job_id: str, place_id: str, name: str | None, status: str, error: str | None) -> None:
     supabase.table("scrape_job_items").upsert(
         {"job_id": job_id, "place_id": place_id, "name": name, "status": status, "error": error}
@@ -158,7 +179,7 @@ async def _enrich_candidates(
 
             rating = details.get("rating")
             review_count = details.get("userRatingCount")
-            category, is_new_venue = sc.categorize(rating, review_count)
+            _category, is_new_venue = sc.categorize(rating, review_count)
             place_type = sc.normalize_business_type(details.get("types"), business_type)
 
             address = details.get("formattedAddress", "")
@@ -180,6 +201,8 @@ async def _enrich_candidates(
                             "business_type": place_type,
                             "rating": rating,
                             "review_count": review_count,
+                            # Category is now assigned by the Instagram analysis
+                            # (Model B). Until that runs the venue is unscored.
                             "category": "Not analysed",
                             "is_new_venue": is_new_venue,
                             "source": "scraper",
@@ -344,25 +367,25 @@ def run_analysis_job(job_id: str, contact_id: str) -> None:
 
         result = pv.analyze(anthropic_client, contact, screenshots, analysis_context)
 
+        # Model B scoring: turn the six 0-20 dimensions into Intent / Craft /
+        # gap / opportunity / category, using the tunable scoring_config.
         dimensions = result.get("dimensions", [])
-        total_max = sum(d.get("max", 0) for d in dimensions) or 100
-        total_score = result.get("total_score", sum(d.get("score", 0) for d in dimensions))
-        priority_score = max(1, min(10, round(total_score / total_max * 10)))
+        config = _load_scoring_config()
+        scores = pv.compute_opportunity(dimensions, config)
 
-        # Categoria basata sullo score Instagram, non sui dati Google
-        if total_score >= 65:
-            ig_category = "High"
-        elif total_score >= 40:
-            ig_category = "Medium"
-        else:
-            ig_category = "Low"
+        total_score = scores["opportunity"]   # the 0-100 number shown in the IG column
+        total_max = 100
+        priority_score = max(1, min(10, round(total_score / 10)))
 
         supabase.table("contacts").update(
             {
-                "category": ig_category,
+                "category": scores["category"],
                 "analysis": result.get("summary", ""),
                 "score_breakdown": {
                     "dimensions": dimensions,
+                    "intent": scores["intent"],
+                    "craft": scores["craft"],
+                    "gap": scores["gap"],
                     "total_score": total_score,
                     "total_max": total_max,
                     "has_videographer": result.get("has_videographer", "unclear"),
@@ -378,14 +401,21 @@ def run_analysis_job(job_id: str, contact_id: str) -> None:
             {
                 "contact_id": contact_id,
                 "type": "analysis",
-                "body": f"Instagram analysis: {total_score}/{total_max} — {result.get('summary', '')}",
+                "body": (
+                    f"Instagram opportunity: {total_score}/100 "
+                    f"(intent {scores['intent']}, craft {scores['craft']}, gap {scores['gap']}) "
+                    f"[{scores['category']}] — {result.get('summary', '')}"
+                ),
             }
         ).execute()
 
         supabase.table("analysis_jobs").update(
             {"status": "completed", "finished_at": "now"}
         ).eq("id", job_id).execute()
-        log.info("[analysis %s] completed for contact %s: %s/%s", job_id, contact_id, total_score, total_max)
+        log.info(
+            "[analysis %s] completed for contact %s: opp %s/100 [%s]",
+            job_id, contact_id, total_score, scores["category"],
+        )
 
     except Exception as exc:
         log.exception("[analysis %s] failed", job_id)

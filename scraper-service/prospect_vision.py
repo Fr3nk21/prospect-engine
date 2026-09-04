@@ -1,10 +1,10 @@
 """
 UnFocus — Instagram screenshot analysis + email generation (Claude Vision).
 
-Used by the /analyze background job in main.py. Score breakdown keeps the
-six dimensions already validated in the old prospect_analyzer.py (Obsidian
-CLI), restructured as a list so the frontend can render any number of
-dimensions without hardcoding field names.
+Used by the /analyze background job in main.py. The model scores six 0-20
+dimensions; main.py then combines them into the Intent / Craft / opportunity
+score and the High/Medium/Low category, using weights/thresholds read from
+the `scoring_config` settings row (falling back to DEFAULT_SCORING_CONFIG).
 """
 from __future__ import annotations
 
@@ -26,20 +26,49 @@ MEDIA_TYPES = {
 # Sector description sentence — overridable via the `analysis_context`
 # settings key (edited from the Settings page in the UI) so the tool can be
 # retargeted at a different industry (barbershop, cleaning company, ...)
-# without a code change. This default matches what was hardcoded before.
+# without a code change.
 DEFAULT_ANALYSIS_CONTEXT = "a videography and photography studio in Melbourne specialising in hospitality content"
+
+# --- Scoring model (Model B: "how good a client is this", not "how nice is
+# their Instagram"). Two indicators derived from the six dimensions:
+#   Intent  = do they care about their brand? (would they ever pay for content)
+#   Craft   = how good is their photo/video quality already?
+#   gap     = Intent - Craft  -> a big positive gap = big opportunity for us.
+# Overridable later via the `scoring_config` settings row; this is the fallback.
+DEFAULT_SCORING_CONFIG = {
+    "intent_weights": {
+        "content_consistency": 35,
+        "posting_frequency": 30,
+        "engagement_signals": 20,
+        "bio_profile": 15,
+    },
+    "craft_weights": {
+        "video_presence": 60,
+        "photo_quality": 40,
+    },
+    "thresholds": {
+        "intent_min": 40,   # below this they won't invest -> Low regardless of gap
+        "gap_high": 20,     # care + clear quality gap -> High
+        "gap_medium": 5,    # some gap -> Medium; below this they're already served -> Low
+    },
+    "opportunity_blend": {
+        "intent_share": 0.4,   # the shown 0-100 score blends intent and the gap
+        "gap_share": 0.6,
+        "gap_ceiling": 40,     # a gap of 40+ counts as maximal opportunity
+    },
+}
 
 SYSTEM_PROMPT_TEMPLATE = """You are a digital marketing consultant for UnFocus, {analysis_context}.
 
-You will receive Instagram screenshots of a venue plus some business context. Analyse the screenshots and produce a scored breakdown and three outreach emails.
+You will receive Instagram screenshots of a venue plus some business context. Score six dimensions and write three outreach emails. Do NOT compute any total or category yourself, only score the six dimensions honestly.
 
-SCORING, six dimensions, explain each with one sentence:
-- visual_quality (max 20): photo/video quality, professional or phone snapshots?
-- content_consistency (max 20): cohesive visual style/brand, or random?
-- video_presence (max 20): Reels/video content and quality, KEY, this is what we sell
-- posting_frequency (max 15): how often, gaps, active or dormant
-- engagement_signals (max 10): comments/likes visible
-- bio_profile (max 15): professional bio, highlights, contact info
+SCORING, six dimensions, each scored 0-20, explain each with one sentence:
+- photo_quality (0-20): quality of the still photography. Lighting, composition, styling, editing. Professional shoot or phone snapshots?
+- video_presence (0-20): amount AND quality of video/Reels. Look for a Reels tab, play icons on thumbnails, view counts, cover frames. Little or no video is a LOW score even when the photos are good. This is central to what we sell, judge it strictly.
+- content_consistency (0-20): a cohesive visual style and brand identity across the grid, or random and inconsistent?
+- posting_frequency (0-20): how often they post, how recent, visible gaps or dormancy.
+- engagement_signals (0-20): likes and comments visible, relative to how many followers they have.
+- bio_profile (0-20): professional bio, highlights, contact info, a working link.
 
 EMAIL PHILOSOPHY (applies to all three variants, same substance, different register):
 - Write like a real business owner emailing another business owner: professional, direct, warm. Short sentences, plain language. No marketing hype, no filler adjectives, no clichés. It must read as a genuine note from one professional to another, never as a template.
@@ -63,14 +92,13 @@ EMAIL PHILOSOPHY (applies to all three variants, same substance, different regis
 Respond ONLY with valid JSON, no markdown fences, matching exactly:
 {
   "dimensions": [
-    {"key": "visual_quality", "label": "Visual Quality", "max": 20, "score": 0, "note": "..."},
-    {"key": "content_consistency", "label": "Content Consistency", "max": 20, "score": 0, "note": "..."},
+    {"key": "photo_quality", "label": "Photo Quality", "max": 20, "score": 0, "note": "..."},
     {"key": "video_presence", "label": "Video Presence", "max": 20, "score": 0, "note": "..."},
-    {"key": "posting_frequency", "label": "Posting Frequency", "max": 15, "score": 0, "note": "..."},
-    {"key": "engagement_signals", "label": "Engagement Signals", "max": 10, "score": 0, "note": "..."},
-    {"key": "bio_profile", "label": "Bio & Profile Setup", "max": 15, "score": 0, "note": "..."}
+    {"key": "content_consistency", "label": "Content Consistency", "max": 20, "score": 0, "note": "..."},
+    {"key": "posting_frequency", "label": "Posting Frequency", "max": 20, "score": 0, "note": "..."},
+    {"key": "engagement_signals", "label": "Engagement Signals", "max": 20, "score": 0, "note": "..."},
+    {"key": "bio_profile", "label": "Bio & Profile Setup", "max": 20, "score": 0, "note": "..."}
   ],
-  "total_score": 0,
   "summary": "2-3 sentence overall assessment",
   "has_videographer": "yes/no/unclear",
   "email_technical": "full email body",
@@ -97,6 +125,53 @@ def _strip_dashes(text: str) -> str:
     text = text.replace(" — ", ", ").replace("—", ", ")
     text = text.replace(" – ", "-").replace("–", "-")
     return text
+
+
+def compute_opportunity(dimensions: list[dict], config: dict | None = None) -> dict:
+    """Turns the six raw 0-20 dimension scores into Intent, Craft, gap, the
+    0-100 opportunity score, and the High/Medium/Low category. Pure function,
+    no I/O, so it can be unit-tested. See DEFAULT_SCORING_CONFIG for the shape
+    of `config`; missing keys fall back to the defaults."""
+    config = config or DEFAULT_SCORING_CONFIG
+    by_key = {d.get("key"): d for d in dimensions}
+
+    def norm(key: str) -> float:
+        d = by_key.get(key)
+        if not d:
+            return 0.0
+        mx = d.get("max", 20) or 20
+        return (d.get("score", 0) or 0) / mx  # 0..1
+
+    iw = config.get("intent_weights", DEFAULT_SCORING_CONFIG["intent_weights"])
+    cw = config.get("craft_weights", DEFAULT_SCORING_CONFIG["craft_weights"])
+    th = config.get("thresholds", DEFAULT_SCORING_CONFIG["thresholds"])
+    blend = config.get("opportunity_blend", DEFAULT_SCORING_CONFIG["opportunity_blend"])
+
+    intent = sum(norm(k) * w for k, w in iw.items())   # 0..100
+    craft = sum(norm(k) * w for k, w in cw.items())     # 0..100
+    gap = intent - craft
+
+    ceiling = blend.get("gap_ceiling", 40) or 40
+    gap_component = max(0.0, min(gap, ceiling)) / ceiling * 100.0
+    opportunity = blend.get("intent_share", 0.4) * intent + blend.get("gap_share", 0.6) * gap_component
+
+    if intent < th.get("intent_min", 40):
+        opportunity *= 0.4
+        category = "Low"
+    elif gap >= th.get("gap_high", 20):
+        category = "High"
+    elif gap >= th.get("gap_medium", 5):
+        category = "Medium"
+    else:
+        category = "Low"
+
+    return {
+        "intent": round(intent, 1),
+        "craft": round(craft, 1),
+        "gap": round(gap, 1),
+        "opportunity": round(opportunity),
+        "category": category,
+    }
 
 
 def _parse_json_response(raw_text: str) -> dict:
