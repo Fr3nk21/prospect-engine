@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import BackButton from '@/components/back-button'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CategoryTag, NewVenueBadge, Rating } from '@/components/contact-badges'
@@ -74,9 +75,7 @@ export default async function ContactDetailPage({
 
   return (
     <div className="page">
-      <Link className="back" href="/contacts">
-        ← All contacts
-      </Link>
+      <BackButton />
 
       <header className="detail-head">
         <div>
