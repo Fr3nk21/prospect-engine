@@ -70,24 +70,16 @@ export default async function ContactsPage({
     supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('status', 'To contact'),
     supabase.from('contacts').select('business_type').not('business_type', 'is', null),
     supabase.from('contacts').select('suburb').not('suburb', 'is', null),
-    // contact_ids that have at least one screenshot
     supabase.from('screenshots').select('contact_id'),
-    // completed analyses with the total_score extracted from score_breakdown JSON
-    supabase
-      .from('analysis_jobs')
-      .select('contact_id')
-      .eq('status', 'completed'),
+    supabase.from('analysis_jobs').select('contact_id').eq('status', 'completed'),
   ])
 
   const types = Array.from(new Set((typeRows ?? []).map((r) => r.business_type as string))).sort()
   const cities = Array.from(new Set((suburbRows ?? []).map((r) => r.suburb as string))).sort()
 
-  // Build sets/maps for O(1) lookup per row
   const contactsWithScreenshots = new Set((screenshotRows ?? []).map((r) => r.contact_id as string))
   const analysedContactIds = new Set((analysisRows ?? []).map((r) => r.contact_id as string))
 
-  // For contacts that have a completed analysis, fetch the instagram score
-  // directly from the contacts table (score_breakdown->total_score)
   let scoreMap = new Map<string, number>()
   if (analysedContactIds.size > 0) {
     const ids = Array.from(analysedContactIds)
@@ -106,22 +98,22 @@ export default async function ContactsPage({
   }
 
   const rows: ContactListItem[] = (contacts ?? []).map((c) => {
-  const id = c.id as string
-  return {
-    id,
-    name: c.name as string,
-    suburb: c.suburb as string | null,
-    business_type: c.business_type as string | null,
-    rating: c.rating as number | null,
-    review_count: c.review_count as number | null,
-    category: c.category as string,
-    is_new_venue: c.is_new_venue as boolean,
-    status: c.status as string,
-    last_contact_date: c.last_contact_date as string | null,
-    has_screenshots: contactsWithScreenshots.has(id),
-    instagram_score: scoreMap.get(id) ?? null,
-  }
-})
+    const id = c.id as string
+    return {
+      id,
+      name: c.name as string,
+      suburb: c.suburb as string | null,
+      business_type: c.business_type as string | null,
+      rating: c.rating as number | null,
+      review_count: c.review_count as number | null,
+      category: c.category as string,
+      is_new_venue: c.is_new_venue as boolean,
+      status: c.status as string,
+      last_contact_date: c.last_contact_date as string | null,
+      has_screenshots: contactsWithScreenshots.has(id),
+      instagram_score: scoreMap.get(id) ?? null,
+    }
+  })
 
   const total = filteredCount ?? 0
   const pages = Math.max(1, Math.ceil(total / pageSize))
@@ -149,6 +141,9 @@ export default async function ContactsPage({
     return dir === 'asc' ? ' ↑' : ' ↓'
   }
 
+  // Column order in the header: Business, IG, Category, Rating, Status, Last contact
+  const sortableColumns = Object.keys(SORT_COLUMNS) as SortColumn[]
+
   return (
     <div className="page">
       <ScrapePanel />
@@ -170,18 +165,38 @@ export default async function ContactsPage({
           rows={rows}
           headerCells={
             <>
-              {(Object.keys(SORT_COLUMNS) as SortColumn[]).map((column) => (
-                <th
-                  key={column}
-                  className={column === 'rating' || column === 'last_contact_date' ? 'right sortable' : 'sortable'}
-                >
-                  <Link href={sortHref(column)}>
-                    {SORT_COLUMNS[column]}
-                    {arrow(column)}
-                  </Link>
-                </th>
-              ))}
+              {/* Business */}
+              <th className="sortable">
+                <Link href={sortHref('name')}>
+                  {SORT_COLUMNS['name']}{arrow('name')}
+                </Link>
+              </th>
+              {/* IG — before Category */}
               <th className="center">IG</th>
+              {/* Category */}
+              <th className="sortable">
+                <Link href={sortHref('category')}>
+                  {SORT_COLUMNS['category']}{arrow('category')}
+                </Link>
+              </th>
+              {/* Rating — dimmed header to match the dimmed cell */}
+              <th className="right sortable" style={{ opacity: 0.45 }}>
+                <Link href={sortHref('rating')}>
+                  {SORT_COLUMNS['rating']}{arrow('rating')}
+                </Link>
+              </th>
+              {/* Status */}
+              <th className="sortable">
+                <Link href={sortHref('status')}>
+                  {SORT_COLUMNS['status']}{arrow('status')}
+                </Link>
+              </th>
+              {/* Last contact */}
+              <th className="right sortable">
+                <Link href={sortHref('last_contact_date')}>
+                  {SORT_COLUMNS['last_contact_date']}{arrow('last_contact_date')}
+                </Link>
+              </th>
             </>
           }
         />

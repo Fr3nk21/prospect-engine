@@ -62,7 +62,12 @@ export default function ScreenshotUpload({
   const [pending, setPending] = useState<PendingFile[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Optimistic delete: track which ids are being removed locally so the UI
+  // updates instantly. If the server action fails, the id is removed from
+  // this set and the screenshot reappears. router.refresh() syncs the final
+  // server state silently in the background after the action completes.
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
 
   const processFiles = useCallback(
     async (fileList: FileList | File[]) => {
@@ -70,7 +75,8 @@ export default function ScreenshotUpload({
       const files = Array.from(fileList)
 
       for (const file of files) {
-        const slotsLeft = MAX_SCREENSHOTS - screenshots.length - pending.length
+        const visibleCount = screenshots.filter((s) => !removingIds.has(s.id)).length
+        const slotsLeft = MAX_SCREENSHOTS - visibleCount - pending.length
         if (slotsLeft <= 0) {
           setFormError(`Max ${MAX_SCREENSHOTS} screenshots per contact — reached the limit.`)
           break
@@ -109,17 +115,31 @@ export default function ScreenshotUpload({
           )
         }
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [contactId, screenshots.length, pending.length, uploadScreenshot, router]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [contactId, screenshots, removingIds, pending.length, uploadScreenshot, router]
   )
 
   async function handleDelete(screenshot: Screenshot) {
-    setDeletingId(screenshot.id)
-    await deleteScreenshot(contactId, screenshot.id, screenshot.storage_path)
-    router.refresh()
-    setDeletingId(null)
+    // Optimistic: hide immediately
+    setRemovingIds((prev) => new Set(prev).add(screenshot.id))
+    try {
+      await deleteScreenshot(contactId, screenshot.id, screenshot.storage_path)
+      // Sync server state quietly — no visible delay for the user
+      router.refresh()
+    } catch (err) {
+      // Rollback: make the screenshot reappear
+      console.error('[screenshot-upload] delete failed', err)
+      setRemovingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(screenshot.id)
+        return next
+      })
+      setFormError('Could not remove the screenshot. Try again.')
+    }
   }
+
+  const visibleScreenshots = screenshots.filter((s) => !removingIds.has(s.id))
 
   return (
     <div className="screenshot-upload">
@@ -150,7 +170,7 @@ export default function ScreenshotUpload({
         />
         <p>Drag & drop screenshots here, or click to browse</p>
         <p className="hint dim mono">
-          {screenshots.length + pending.length}/{MAX_SCREENSHOTS}
+          {visibleScreenshots.length + pending.length}/{MAX_SCREENSHOTS}
         </p>
       </div>
 
@@ -160,19 +180,18 @@ export default function ScreenshotUpload({
         </div>
       )}
 
-      {(screenshots.length > 0 || pending.length > 0) && (
+      {(visibleScreenshots.length > 0 || pending.length > 0) && (
         <div className="screenshot-grid">
-          {screenshots.map((s) => (
+          {visibleScreenshots.map((s) => (
             <div key={s.id} className="screenshot-thumb">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={s.url} alt="" />
               <button
                 type="button"
                 className="btn-ghost small"
-                disabled={deletingId === s.id}
                 onClick={() => handleDelete(s)}
               >
-                {deletingId === s.id ? '…' : 'Remove'}
+                Remove
               </button>
             </div>
           ))}

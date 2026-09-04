@@ -12,6 +12,14 @@ const EMAIL_VARIANTS: { key: EmailVariant; label: string }[] = [
   { key: 'email_followup', label: 'Follow-up' },
 ]
 
+// Human-readable status messages shown below the Analyze button while a job
+// is in progress. Queued = waiting for Railway to pick it up; running = Claude
+// Vision is processing the screenshots.
+const JOB_STATUS_LABEL: Record<string, string> = {
+  queued:  'Waiting for the analysis service…',
+  running: 'Analyzing screenshots with Claude Vision…',
+}
+
 export default function AnalysisPanel({
   contactId,
   contactEmail,
@@ -144,6 +152,13 @@ export default function AnalysisPanel({
         )}
       </button>
 
+      {/* Status message while the job is in progress */}
+      {running && job.status in JOB_STATUS_LABEL && (
+        <p className="hint dim top-gap" style={{ fontStyle: 'italic' }}>
+          {JOB_STATUS_LABEL[job.status]}
+        </p>
+      )}
+
       {formError && (
         <div className="scrape-result mono" style={{ color: 'var(--rec)' }}>
           {formError}
@@ -229,9 +244,6 @@ function EmailVariantEditor({
     body: string
   ) => Promise<{ error: string | null }>
 }) {
-  // savedValue = last value confirmed persisted (from the server, or after a
-  // successful Save/Send). draft only exists while the modal is open, and is
-  // discarded (not merged back) on Cancel/X — Save is what commits it.
   const [savedValue, setSavedValue] = useState(initialValue)
   const [draft, setDraft] = useState(initialValue)
   const [expanded, setExpanded] = useState(false)
@@ -275,9 +287,6 @@ function EmailVariantEditor({
         setSendError(result.error)
         return
       }
-      // Whatever was actually sent becomes the saved value too, even if the
-      // user tweaked the draft and hit Send without an explicit Save first
-      // — otherwise a reload would show stale, unsent text.
       if (text !== savedValue) await updateEmailVariant(contactId, variant, text)
       setSavedValue(text)
       setSent(true)

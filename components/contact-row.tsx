@@ -30,26 +30,36 @@ export default function ContactRow({
           {contact.suburb ? ` · ${contact.suburb}` : ''}
         </div>
       </td>
-      <td>
-        <CategoryTag value={contact.category} />
-        {contact.is_new_venue && <NewVenueBadge />}
-      </td>
-      <td className="right">
-        <Rating value={contact.rating} reviews={contact.review_count} />
-      </td>
-      <td>
-        <StatusDot value={contact.status} />
-      </td>
-      <td className="right mono dim">{contact.last_contact_date ?? '—'}</td>
+      {/* IG column — moved before Category */}
       <td className="center mono ig-status-cell">
         {contact.has_screenshots || contact.instagram_score !== null ? (
-          <span title={contact.instagram_score !== null ? `Instagram score: ${contact.instagram_score}/100` : 'Screenshots uploaded'}>
+          <span title={contact.instagram_score !== null ? `Opportunity score: ${contact.instagram_score}/100` : 'Screenshots uploaded'}>
             📷{contact.instagram_score !== null ? ` ${contact.instagram_score}` : ''}
           </span>
         ) : (
           <span className="dim">—</span>
         )}
       </td>
+      {/* Category */}
+      <td>
+        <CategoryTag value={contact.category} />
+        {contact.is_new_venue && <NewVenueBadge />}
+      </td>
+      {/* Rating — dimmed and smaller, kept for triage before analysis */}
+      <td className="right mono dim" style={{ fontSize: '0.78rem', opacity: 0.5 }}>
+        {contact.rating != null ? (
+          <>
+            {contact.rating.toFixed(1)}
+            {contact.review_count != null && (
+              <span style={{ fontSize: '0.72rem' }}> / {contact.review_count}</span>
+            )}
+          </>
+        ) : '—'}
+      </td>
+      <td>
+        <StatusDot value={contact.status} />
+      </td>
+      <td className="right mono dim">{contact.last_contact_date ?? '—'}</td>
     </tr>
   )
 }

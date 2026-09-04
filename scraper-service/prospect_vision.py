@@ -23,18 +23,8 @@ MEDIA_TYPES = {
     "webp": "image/webp",
 }
 
-# Sector description sentence — overridable via the `analysis_context`
-# settings key (edited from the Settings page in the UI) so the tool can be
-# retargeted at a different industry (barbershop, cleaning company, ...)
-# without a code change.
 DEFAULT_ANALYSIS_CONTEXT = "a videography and photography studio in Melbourne specialising in hospitality content"
 
-# --- Scoring model (Model B: "how good a client is this", not "how nice is
-# their Instagram"). Two indicators derived from the six dimensions:
-#   Intent  = do they care about their brand? (would they ever pay for content)
-#   Craft   = how good is their photo/video quality already?
-#   gap     = Intent - Craft  -> a big positive gap = big opportunity for us.
-# Overridable later via the `scoring_config` settings row; this is the fallback.
 DEFAULT_SCORING_CONFIG = {
     "intent_weights": {
         "content_consistency": 35,
@@ -47,14 +37,14 @@ DEFAULT_SCORING_CONFIG = {
         "photo_quality": 40,
     },
     "thresholds": {
-        "intent_min": 40,   # below this they won't invest -> Low regardless of gap
-        "gap_high": 20,     # care + clear quality gap -> High
-        "gap_medium": 5,    # some gap -> Medium; below this they're already served -> Low
+        "intent_min": 40,
+        "gap_high": 20,
+        "gap_medium": 5,
     },
     "opportunity_blend": {
-        "intent_share": 0.4,   # the shown 0-100 score blends intent and the gap
+        "intent_share": 0.4,
         "gap_share": 0.6,
-        "gap_ceiling": 40,     # a gap of 40+ counts as maximal opportunity
+        "gap_ceiling": 40,
     },
 }
 
@@ -73,13 +63,20 @@ SCORING, six dimensions, each scored 0-20, explain each with one sentence:
 EMAIL PHILOSOPHY (applies to all three variants, same substance, different register):
 - Write like a real business owner emailing another business owner: professional, direct, warm. Short sentences, plain language. No marketing hype, no filler adjectives, no clichés. It must read as a genuine note from one professional to another, never as a template.
 - Never use em dashes (—) or en dashes (–) anywhere in the email. Use commas, full stops, or split into two sentences instead.
-- First person, honest and human tone, not salesy
-- Prove you actually looked: reference something SPECIFIC seen in the screenshots (a dish, an event, the interior, a reel), never a generic observation
-- One honest note on what's working or missing, tied to 1-2 concrete video/photo ideas
+- First person, honest and human tone, not salesy.
+- Prove you actually looked: reference something SPECIFIC seen in the screenshots (a dish, an event, the interior, a reel), never a generic observation.
+- One honest note on what's working or missing, tied to 1-2 concrete video/photo ideas.
+
+LEAD WITH THE RIGHT CRAFT GAP — photo vs video:
+- Look at your own photo_quality and video_presence scores before writing. Lead the email's concrete observation with whichever of the two is weaker: if video is the weaker one, focus the suggestion on video and Reels (the higher-value angle for us); if photo is weaker, focus on photography. If both are weak, lead with video. If both are already strong, pick the one with more room and keep the pitch lighter.
+
+MATCH CONFIDENCE TO WHAT YOU SEE — intent vs execution:
+- When the brand clearly cares (consistent identity, regular posting) but the execution lags behind, be direct and specific about the gap and the fix. When the signals are weaker or the profile is already polished, keep the tone lighter and more exploratory, and never manufacture a problem that isn't there.
+
 - Greeting: "Hey [business name]"
-- Sign-off must be exactly two lines: "Cheers," alone on the first line, then "Francesco" alone on the line below (use a real line break between them)
+- Sign-off must be exactly two lines: "Cheers," alone on the first line, then "Francesco" alone on the line below (use a real line break between them).
 - CTA: end with a low-friction, concrete next step tied to the observation made earlier in the email. Style example: "Want me to put together a couple of quick ideas for [business name]?" Never end with a vague question about feelings or interest (avoid phrasing like "does this resonate").
-- No bullets, no bold, no emoji, no generic adjectives ("stunning", "amazing"), no artificial urgency, nothing that could be copy-pasted onto any other business
+- No bullets, no bold, no emoji, no generic adjectives ("stunning", "amazing"), no artificial urgency, nothing that could be copy-pasted onto any other business.
 
 - email_technical: opens more directly with the observation + suggestion.
   Fits structured/corporate-feeling businesses. Max ~120 words.
@@ -130,8 +127,7 @@ def _strip_dashes(text: str) -> str:
 def compute_opportunity(dimensions: list[dict], config: dict | None = None) -> dict:
     """Turns the six raw 0-20 dimension scores into Intent, Craft, gap, the
     0-100 opportunity score, and the High/Medium/Low category. Pure function,
-    no I/O, so it can be unit-tested. See DEFAULT_SCORING_CONFIG for the shape
-    of `config`; missing keys fall back to the defaults."""
+    no I/O. See DEFAULT_SCORING_CONFIG for the shape of `config`."""
     config = config or DEFAULT_SCORING_CONFIG
     by_key = {d.get("key"): d for d in dimensions}
 
@@ -140,15 +136,15 @@ def compute_opportunity(dimensions: list[dict], config: dict | None = None) -> d
         if not d:
             return 0.0
         mx = d.get("max", 20) or 20
-        return (d.get("score", 0) or 0) / mx  # 0..1
+        return (d.get("score", 0) or 0) / mx
 
     iw = config.get("intent_weights", DEFAULT_SCORING_CONFIG["intent_weights"])
     cw = config.get("craft_weights", DEFAULT_SCORING_CONFIG["craft_weights"])
     th = config.get("thresholds", DEFAULT_SCORING_CONFIG["thresholds"])
     blend = config.get("opportunity_blend", DEFAULT_SCORING_CONFIG["opportunity_blend"])
 
-    intent = sum(norm(k) * w for k, w in iw.items())   # 0..100
-    craft = sum(norm(k) * w for k, w in cw.items())     # 0..100
+    intent = sum(norm(k) * w for k, w in iw.items())
+    craft = sum(norm(k) * w for k, w in cw.items())
     gap = intent - craft
 
     ceiling = blend.get("gap_ceiling", 40) or 40
@@ -176,17 +172,16 @@ def compute_opportunity(dimensions: list[dict], config: dict | None = None) -> d
 
 def _parse_json_response(raw_text: str) -> dict:
     """Claude is asked for raw JSON but sometimes wraps it in a ```json fence
-    or adds a sentence before/after anyway, non-deterministic, seen in
-    production. Strip fences if present, then fall back to slicing between
-    the first '{' and the last '}' before giving up."""
+    or adds a sentence before/after anyway. Strip fences if present, then
+    fall back to slicing between the first '{' and the last '}'."""
     text = raw_text.strip()
 
     if text.startswith("```"):
         first_newline = text.find("\n")
         if first_newline != -1:
-            text = text[first_newline + 1 :]
+            text = text[first_newline + 1:]
         if text.endswith("```"):
-            text = text[: -len("```")]
+            text = text[:-len("```")]
         text = text.strip()
 
     try:
@@ -198,7 +193,7 @@ def _parse_json_response(raw_text: str) -> dict:
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
         try:
-            return json.loads(text[start : end + 1])
+            return json.loads(text[start: end + 1])
         except json.JSONDecodeError:
             pass
 
@@ -213,7 +208,7 @@ def analyze(
     screenshots: list[tuple[str, bytes]],
     analysis_context: str | None = None,
 ) -> dict:
-    """screenshots: list of (storage_path, raw_bytes), newest-safe order doesn't matter."""
+    """screenshots: list of (storage_path, raw_bytes)."""
     content = []
     for storage_path, raw in screenshots[:MAX_IMAGES]:
         data = base64.standard_b64encode(raw).decode("utf-8")
