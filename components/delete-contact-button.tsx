@@ -1,6 +1,7 @@
 'use client'
 
 import { useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function DeleteContactButton({
   contactId,
@@ -12,10 +13,14 @@ export default function DeleteContactButton({
   deleteContact: (contactId: string) => Promise<void>
 }) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleClick() {
     if (!window.confirm(`Eliminating ${contactName}. This cannot be undone.`)) return
-    startTransition(() => deleteContact(contactId))
+    startTransition(async () => {
+      await deleteContact(contactId)
+      router.back()
+    })
   }
 
   return (

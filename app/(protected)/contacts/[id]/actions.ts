@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { sendGmailMessage } from '@/lib/gmail'
 import { deleteContactsById } from '@/lib/delete-contacts'
@@ -10,7 +9,6 @@ import type { EmailVariant } from '@/lib/contacts'
 export async function deleteContact(contactId: string) {
   await deleteContactsById([contactId])
   revalidatePath('/contacts')
-  redirect('/contacts')
 }
 
 export async function updateContactStatus(contactId: string, newStatus: string) {
@@ -113,9 +111,6 @@ export async function sendEmail(
 
   if (!contact?.email) return { error: 'This contact has no email address on file.' }
 
-  // A prior gmail_message_id means an earlier email already went to this
-  // contact — thread this one as a reply instead of starting a new
-  // conversation (subject gets "Re: " automatically inside sendGmailMessage).
   let sent: { id: string; threadId: string; messageId: string }
   try {
     sent = await sendGmailMessage({
@@ -132,8 +127,6 @@ export async function sendEmail(
 
   const emailVariant = variant.replace(/^email_/, '') as 'technical' | 'warm' | 'followup'
 
-  // Only "To contact" moves to "Contacted" here — a follow-up sent while
-  // already "In conversation" (etc.) shouldn't regress the status.
   const statusUpdate: Record<string, string> = {
     gmail_thread_id: sent.threadId,
     gmail_message_id: sent.messageId,
@@ -165,4 +158,47 @@ export async function deleteScreenshot(
   await supabase.from('screenshots').delete().eq('id', screenshotId)
 
   revalidatePath(`/contacts/${contactId}`)
+}
+
+type EditableContactFields = Partial<Record<'email' | 'phone' | 'instagram', string>>
+
+export async function updateContactFields(
+  contactId: string,
+  changes: EditableContactFields
+) {
+  const supabase = await createClient()
+
+  const { data: current } = await supabase
+    .from('contacts')
+    .select('manually_edited_fields, email, phone, instagram')
+    .eq('id', contactId)
+    .single()
+
+  if (!current) return { error: 'Contact not found.' }
+
+  const changedFields = Object.entries(changes).filter(
+    ([key, value]) => value !== undefined && value !== (current as any)[key]
+  )
+
+  if (changedFields.length === 0) return { error: null }
+
+  const updatedProtectedSet = new Set([
+    ...current.manually_edited_fields,
+    ...changedFields.map(([key]) => key),
+  ])
+
+  const updatePayload = Object.fromEntries(changedFields)
+
+  const { error } = await supabase
+    .from('contacts')
+    .update({
+      ...updatePayload,
+      manually_edited_fields: Array.from(updatedProtectedSet),
+    })
+    .eq('id', contactId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/contacts/${contactId}`)
+  return { error: null }
 }

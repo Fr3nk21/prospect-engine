@@ -7,7 +7,7 @@ export const STATUSES = [
   'To recontact',
 ] as const
 export const CATEGORIES = ['High', 'Medium', 'Low'] as const
-export const PAGE_SIZES = [5, 10, 25] as const
+export const PAGE_SIZES = [5, 10, 25, 50, 100] as const
 export const SORT_COLUMNS = {
   name: 'Business',
   category: 'Category',

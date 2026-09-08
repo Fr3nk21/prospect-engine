@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import BackButton from '@/components/back-button'
+import EditableContactHeader from '@/components/editable-contact-header'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CategoryTag, NewVenueBadge, Rating } from '@/components/contact-badges'
@@ -18,6 +19,7 @@ import {
   updateEmailVariant,
   sendEmail,
   deleteContact,
+  updateContactFields,
 } from './actions'
 
 const SIGNED_URL_TTL_SECONDS = 3600
@@ -79,23 +81,19 @@ export default async function ContactDetailPage({
 
       <header className="detail-head">
         <div>
-          <h1>{c.name}</h1>
-          <div className="detail-meta">
-            {c.address && <span>{c.address}</span>}
-            {c.website && (
-              <a href={c.website} target="_blank" rel="noreferrer">
-                {c.website}
-              </a>
-            )}
-            {c.instagram && (
-              <a className="mono" href={instagramUrl(c.instagram)} target="_blank" rel="noreferrer">
-                {c.instagram}
-              </a>
-            )}
-            {c.phone && <span>{c.phone}</span>}
-            {c.email && <span>{c.email}</span>}
-          </div>
-        </div>
+  <h1>{c.name}</h1>
+  <EditableContactHeader
+    contactId={c.id}
+    fields={{
+      address: c.address,
+      phone: c.phone,
+      website: c.website,
+      email: c.email,
+      instagram: c.instagram,
+    }}
+    updateContactFields={updateContactFields}
+  />
+</div>
         <div className="detail-badges">
           <CategoryTag value={c.category} />
           {c.is_new_venue && <NewVenueBadge />}

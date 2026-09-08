@@ -4,6 +4,8 @@ import ContactsFilterBar from '@/components/contacts-filter-bar'
 import PageSizeSelect from '@/components/page-size-select'
 import ContactsTable from '@/components/contacts-table'
 import ScrapePanel from '@/components/scrape-panel'
+import AddContactButton from '@/components/add-contact-button'
+import { addContact } from './actions'
 import { PAGE_SIZES, SORT_COLUMNS, type ContactListItem, type SortColumn } from '@/lib/contacts'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +40,7 @@ export default async function ContactsPage({
   let query = supabase
     .from('contacts')
     .select(
-      'id, name, suburb, business_type, rating, review_count, category, is_new_venue, status, last_contact_date',
+      'id, name, suburb, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, score_breakdown',
       { count: 'exact' }
     )
 
@@ -56,49 +58,41 @@ export default async function ContactsPage({
   const rangeTo = rangeFrom + pageSize - 1
   query = query.range(rangeFrom, rangeTo)
 
+  // Prima fase: la query paginata, piu' le query indipendenti dagli id
+  // (conteggi e valori per i filtri) — non hanno bisogno di sapere quali
+  // contatti sono in questa pagina.
   const [
     { data: contacts, count: filteredCount },
     { count: totalCount },
     { count: toContactCount },
     { data: typeRows },
     { data: suburbRows },
-    { data: screenshotRows },
-    { data: analysisRows },
   ] = await Promise.all([
     query,
     supabase.from('contacts').select('id', { count: 'exact', head: true }),
     supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('status', 'To contact'),
     supabase.from('contacts').select('business_type').not('business_type', 'is', null),
     supabase.from('contacts').select('suburb').not('suburb', 'is', null),
-    supabase.from('screenshots').select('contact_id'),
-    supabase.from('analysis_jobs').select('contact_id').eq('status', 'completed'),
   ])
 
   const types = Array.from(new Set((typeRows ?? []).map((r) => r.business_type as string))).sort()
   const cities = Array.from(new Set((suburbRows ?? []).map((r) => r.suburb as string))).sort()
 
+  // Seconda fase: ora che conosciamo gli id della pagina corrente,
+  // scopiamo la query su screenshots solo a quei contatti — non piu'
+  // sull'intera tabella.
+  const pageIds = (contacts ?? []).map((c) => c.id as string)
+
+  const { data: screenshotRows } =
+    pageIds.length > 0
+      ? await supabase.from('screenshots').select('contact_id').in('contact_id', pageIds)
+      : { data: [] }
+
   const contactsWithScreenshots = new Set((screenshotRows ?? []).map((r) => r.contact_id as string))
-  const analysedContactIds = new Set((analysisRows ?? []).map((r) => r.contact_id as string))
-
-  let scoreMap = new Map<string, number>()
-  if (analysedContactIds.size > 0) {
-    const ids = Array.from(analysedContactIds)
-    const { data: scoreRows } = await supabase
-      .from('contacts')
-      .select('id, score_breakdown')
-      .in('id', ids)
-      .not('score_breakdown', 'is', null)
-
-    for (const row of scoreRows ?? []) {
-      const sb = row.score_breakdown as { total_score?: number } | null
-      if (sb?.total_score != null) {
-        scoreMap.set(row.id, sb.total_score)
-      }
-    }
-  }
 
   const rows: ContactListItem[] = (contacts ?? []).map((c) => {
     const id = c.id as string
+    const sb = c.score_breakdown as { total_score?: number } | null
     return {
       id,
       name: c.name as string,
@@ -111,7 +105,7 @@ export default async function ContactsPage({
       status: c.status as string,
       last_contact_date: c.last_contact_date as string | null,
       has_screenshots: contactsWithScreenshots.has(id),
-      instagram_score: scoreMap.get(id) ?? null,
+      instagram_score: sb?.total_score ?? null,
     }
   })
 
@@ -149,7 +143,7 @@ export default async function ContactsPage({
       <ScrapePanel />
 
       <section className="panel list-panel">
-        <div className="list-head">
+                <div className="list-head">
           <div>
             <div className="eyebrow">Contacts</div>
             <div className="list-count mono">
@@ -157,6 +151,7 @@ export default async function ContactsPage({
               <span className="dim"> · {toContactCount ?? 0} to contact</span>
             </div>
           </div>
+          <AddContactButton addContact={addContact} />
         </div>
 
         <ContactsFilterBar types={types} cities={cities} />

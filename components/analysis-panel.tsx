@@ -52,6 +52,8 @@ export default function AnalysisPanel({
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
+    const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const analysisStartRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!job || job.status === 'completed' || job.status === 'failed') return
@@ -122,7 +124,20 @@ export default function AnalysisPanel({
     }
   }
 
-  const running = !!job && (job.status === 'queued' || job.status === 'running')
+    const running = !!job && (job.status === 'queued' || job.status === 'running')
+
+  useEffect(() => {
+    if (!running) {
+      analysisStartRef.current = null
+      setElapsedSeconds(0)
+      return
+    }
+    if (analysisStartRef.current === null) analysisStartRef.current = Date.now()
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - analysisStartRef.current!) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [running])
 
   return (
     <section className="panel">
@@ -152,10 +167,14 @@ export default function AnalysisPanel({
         )}
       </button>
 
-      {/* Status message while the job is in progress */}
-      {running && job.status in JOB_STATUS_LABEL && (
+            {/* Status message + honest elapsed-time counter while the job is in progress */}
+      {running && (
         <p className="hint dim top-gap" style={{ fontStyle: 'italic' }}>
-          {JOB_STATUS_LABEL[job.status]}
+          {job.status in JOB_STATUS_LABEL ? JOB_STATUS_LABEL[job.status] : null}
+          {' '}
+          <span className="mono">
+            ({elapsedSeconds}s — di solito ~30s)
+          </span>
         </p>
       )}
 
