@@ -53,7 +53,7 @@ export default function ContactsFilterBar({ types, cities }: { types: string[]; 
         onChange={(e) => setSearch(e.target.value)}
       />
       <select value={category} onChange={(e) => updateParams({ category: e.target.value })}>
-        <option value="All">Category: all</option>
+        <option value="All">Opportunity: all</option>
         {CATEGORIES.map((c) => (
           <option key={c} value={c}>
             {c}

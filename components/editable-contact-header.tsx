@@ -73,19 +73,23 @@ export default function EditableContactHeader({
         <div className="detail-meta">
           {fields.address && <span>{fields.address}</span>}
           {fields.website && (
-            <a href={fields.website} target="_blank" rel="noreferrer">
-              {fields.website}
-            </a>
-          )}
-          {fields.instagram && (
-            <a className="mono" href={instagramUrl(fields.instagram)} target="_blank" rel="noreferrer">
-              {fields.instagram}
-            </a>
-          )}
+  <a href={fields.website} target="_blank" rel="noreferrer">
+    Website ↗
+  </a>
+)}
+{fields.instagram && (
+  <a className="mono" href={instagramUrl(fields.instagram)} target="_blank" rel="noreferrer">
+    @{fields.instagram
+  .replace(/^https?:\/\//i, '')
+  .replace(/^(www\.)?instagram\.com\//i, '')
+  .replace(/^@/, '')
+  .replace(/\/$/, '')} ↗
+  </a>
+)}
           {fields.phone && <span>{fields.phone}</span>}
           {fields.email && <span>{fields.email}</span>}
         </div>
-        <button type="button" className="btn-secondary" onClick={startEditing}>
+        <button type="button" className="btn-ghost small" onClick={startEditing}>
           Modifica
         </button>
       </div>

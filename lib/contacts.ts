@@ -10,7 +10,7 @@ export const CATEGORIES = ['High', 'Medium', 'Low'] as const
 export const PAGE_SIZES = [5, 10, 25, 50, 100] as const
 export const SORT_COLUMNS = {
   name: 'Business',
-  category: 'Category',
+  category: 'Opportunity',
   rating: 'Rating',
   status: 'Status',
   last_contact_date: 'Last contact',

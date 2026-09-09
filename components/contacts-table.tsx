@@ -78,7 +78,7 @@ export default function ContactsTable({
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={6} className="empty">
+              <td colSpan={7} className="empty">
                 No contacts match these filters. Try widening them.
               </td>
             </tr>

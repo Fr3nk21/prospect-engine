@@ -35,6 +35,9 @@ export default async function ContactsPage({
     : 10
   const page = Math.max(0, Number(sp.page) || 0)
 
+  const overdue = sp.overdue === '1'
+const overdueCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
   const supabase = await createClient()
 
   let query = supabase
@@ -46,7 +49,11 @@ export default async function ContactsPage({
 
   if (q) query = query.ilike('name', `%${q}%`)
   if (category !== 'All') query = query.eq('category', category)
-  if (status !== 'All') query = query.eq('status', status)
+    if (overdue) {
+    query = query.eq('status', 'Contacted').lte('last_contact_date', overdueCutoff)
+  } else if (status !== 'All') {
+    query = query.eq('status', status)
+  }
   if (type !== 'All') query = query.eq('business_type', type)
   if (city !== 'All') query = query.eq('suburb', city)
   if (from) query = query.gte('last_contact_date', from)
@@ -61,16 +68,22 @@ export default async function ContactsPage({
   // Prima fase: la query paginata, piu' le query indipendenti dagli id
   // (conteggi e valori per i filtri) — non hanno bisogno di sapere quali
   // contatti sono in questa pagina.
-  const [
+    const [
     { data: contacts, count: filteredCount },
     { count: totalCount },
     { count: toContactCount },
+    { count: overdueCount },
     { data: typeRows },
     { data: suburbRows },
   ] = await Promise.all([
     query,
     supabase.from('contacts').select('id', { count: 'exact', head: true }),
     supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('status', 'To contact'),
+    supabase
+      .from('contacts')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'Contacted')
+      .lte('last_contact_date', overdueCutoff),
     supabase.from('contacts').select('business_type').not('business_type', 'is', null),
     supabase.from('contacts').select('suburb').not('suburb', 'is', null),
   ])
@@ -149,6 +162,12 @@ export default async function ContactsPage({
             <div className="list-count mono">
               {total} <span className="dim">of {totalCount ?? 0}</span>
               <span className="dim"> · {toContactCount ?? 0} to contact</span>
+                            <span className="dim">
+                {' · '}
+                <Link href={hrefWith({ overdue: overdue ? null : '1', page: null })}>
+                  {overdue ? '✓ ' : ''}{overdueCount ?? 0} contacted 7+ days ago
+                </Link>
+              </span>
             </div>
           </div>
           <AddContactButton addContact={addContact} />
@@ -166,6 +185,7 @@ export default async function ContactsPage({
                   {SORT_COLUMNS['name']}{arrow('name')}
                 </Link>
               </th>
+              <th>Type</th>
               {/* IG — before Category */}
               <th className="center">IG</th>
               {/* Category */}

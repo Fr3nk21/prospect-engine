@@ -52,6 +52,19 @@ SYSTEM_PROMPT_TEMPLATE = """You are a digital marketing consultant for UnFocus, 
 
 You will receive Instagram screenshots of a venue plus some business context. Score six dimensions and write three outreach emails. Do NOT compute any total or category yourself, only score the six dimensions honestly.
 
+SCREENSHOT TYPES YOU MAY RECEIVE, IN NO FIXED ORDER — identify each from its
+own visual content, never assume a screenshot's type from its position:
+- Profile header (bio, follower count, highlights)
+- Grid view (rows of post thumbnails)
+- Reels tab open (a list of video thumbnails, each with a large play icon and
+  view count — distinct from the small play icon on a single grid thumbnail)
+- An individual post opened (shows likes/comments)
+If a Reels tab screenshot is present, treat it as the primary evidence for
+video_presence — it shows real reels, not just the weak play-icon signal on
+grid thumbnails. If no Reels tab is present, judge video_presence from
+whatever play-icon/cover-frame signals are visible in the grid, but note in
+your reasoning that this is a weaker signal.
+
 SCORING, six dimensions, each scored 0-20, explain each with one sentence:
 - photo_quality (0-20): quality of the still photography. Lighting, composition, styling, editing. Professional shoot or phone snapshots?
 - video_presence (0-20): amount AND quality of video/Reels. Look for a Reels tab, play icons on thumbnails, view counts, cover frames. Little or no video is a LOW score even when the photos are good. This is central to what we sell, judge it strictly.

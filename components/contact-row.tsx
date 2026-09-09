@@ -23,13 +23,11 @@ export default function ContactRow({
           aria-label={`Select ${contact.name}`}
         />
       </td>
-      <td>
+            <td>
         <div className="biz-name">{contact.name}</div>
-        <div className="biz-sub">
-          {contact.business_type ?? '—'}
-          {contact.suburb ? ` · ${contact.suburb}` : ''}
-        </div>
+        <div className="biz-sub">{contact.suburb ?? '—'}</div>
       </td>
+      <td className="dim">{contact.business_type ?? '—'}</td>
       {/* IG column — moved before Category */}
       <td className="center mono ig-status-cell">
         {contact.has_screenshots || contact.instagram_score !== null ? (

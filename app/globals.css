@@ -145,6 +145,7 @@ input[type="date"],
 input[type="search"],
 input[type="email"],
 input[type="password"],
+input[type="text"],
 textarea {
   background: var(--panel-up);
   color: var(--text);
@@ -153,6 +154,23 @@ textarea {
   padding: 9px 12px;
   font: inherit;
   width: 100%;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%239DA3AE' stroke-width='1.5'%3E%3Cpath d='M5 7l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(0.75);
+  cursor: pointer;
 }
 select:focus,
 input:focus,
@@ -343,7 +361,32 @@ table.contacts { width: 100%; border-collapse: collapse; }
 .contacts tbody tr { cursor: pointer; transition: background .12s; }
 .contacts tbody tr:hover { background: var(--panel-up); }
 .checkbox-col { width: 34px; padding-right: 0 !important; cursor: default; }
-.checkbox-col input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
+.contacts input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-up);
+  position: relative;
+}
+.contacts input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.contacts input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--accent-text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
 .biz-name { font-weight: 600; }
 .biz-sub { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
 .empty { text-align: center; color: var(--text-dim); padding: 32px 0 !important; }
@@ -370,6 +413,7 @@ table.contacts { width: 100%; border-collapse: collapse; }
   border-radius: 4px;
   border: 1px solid;
   letter-spacing: .05em;
+  white-space: nowrap;
 }
 .stato { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
 .stato-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
@@ -531,3 +575,5 @@ table.contacts { width: 100%; border-collapse: collapse; }
   .detail-grid { grid-template-columns: 1fr; }
   .scrape-row { grid-template-columns: 1fr; }
 }
+
+.list-count a { color: var(--accent); }

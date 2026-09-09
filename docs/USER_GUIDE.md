@@ -57,8 +57,14 @@ indietro, li ritrovi attivi.
 Per ogni venue che vuoi analizzare in profondità:
 
 1. Apri la pagina di dettaglio del contatto
-2. Vai su Instagram del venue e fai **screenshot** della griglia, dei Reels,
-   della bio — fino a 10 screenshot
+2. Vai su Instagram del venue e fai screenshot in quest'ordine consigliato
+   (aiuta il modello, non è obbligatorio saltarne uno):
+   1. Header profilo (bio, follower, highlights)
+   2. Prime righe della griglia post
+   3. **Tab Reels aperto** — è il segnale più forte per capire quanti
+      contenuti video hanno davvero, meglio della sola iconcina play
+   4. Uno o due post aperti con like/commenti visibili
+   Fino a 10 screenshot totali.
 3. Carica gli screenshot nella sezione **"Instagram screenshots"**
    (drag & drop o click per sfogliare)
 4. Clicca **"Analyze Instagram"**
