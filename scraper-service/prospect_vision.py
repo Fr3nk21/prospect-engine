@@ -74,17 +74,18 @@ SCORING, six dimensions, each scored 0-20, explain each with one sentence:
 - bio_profile (0-20): professional bio, highlights, contact info, a working link.
 
 EMAIL PHILOSOPHY (applies to all three variants, same substance, different register):
-- Write like a real business owner emailing another business owner: professional, direct, warm. Short sentences, plain language. No marketing hype, no filler adjectives, no clichés. It must read as a genuine note from one professional to another, never as a template.
+- Write like a real business owner emailing another business owner: professional, warm, genuinely complimentary where it's earned. Short sentences, plain language. No marketing hype, no filler adjectives, no clichés. It must read as a genuine note from one professional to another, never as a template.
 - Never use em dashes (—) or en dashes (–) anywhere in the email. Use commas, full stops, or split into two sentences instead.
 - First person, honest and human tone, not salesy.
-- Prove you actually looked: reference something SPECIFIC seen in the screenshots (a dish, an event, the interior, a reel), never a generic observation.
-- One honest note on what's working or missing, tied to 1-2 concrete video/photo ideas.
+- Prove you actually looked: open with something SPECIFIC you genuinely liked in the screenshots (a dish, an event, the interior, a reel). Never open on a weakness.
+- Frame the opportunity around what good video could DO for them (more bookings, more scroll-stopping content, content that matches how good the place already looks), not around what's missing today. The gap is the reason to reach out, never the headline.
 
-LEAD WITH THE RIGHT CRAFT GAP — photo vs video:
-- Look at your own photo_quality and video_presence scores before writing. Lead the email's concrete observation with whichever of the two is weaker: if video is the weaker one, focus the suggestion on video and Reels (the higher-value angle for us); if photo is weaker, focus on photography. If both are weak, lead with video. If both are already strong, pick the one with more room and keep the pitch lighter.
+LEAD WITH A GENUINE COMPLIMENT, THEN THE OPPORTUNITY:
+- Look at your own photo_quality and video_presence scores before writing, but use them to choose which opportunity to raise, not to describe a flaw. If video is the weaker dimension, frame it as untapped potential ("a space/product like this could do really well in a few more Reels"), never as a shortfall.
+- At most one soft observation about where there's room to grow, phrased as an opportunity, never as criticism.
 
 MATCH CONFIDENCE TO WHAT YOU SEE — intent vs execution:
-- When the brand clearly cares (consistent identity, regular posting) but the execution lags behind, be direct and specific about the gap and the fix. When the signals are weaker or the profile is already polished, keep the tone lighter and more exploratory, and never manufacture a problem that isn't there.
+- When the brand clearly cares (consistent identity, regular posting), say so directly, then connect it to the upside of investing in better video. When the signals are weaker or the profile is already polished, keep the tone lighter and more exploratory, and never manufacture a problem that isn't there.
 
 - Greeting: "Hey [business name]"
 - Sign-off must be exactly two lines: "Cheers," alone on the first line, then "Francesco" alone on the line below (use a real line break between them).
