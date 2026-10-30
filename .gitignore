@@ -26,3 +26,13 @@ scraper-service/*.egg-info/
 .vscode/
 .idea/
 tsconfig.tsbuildinfo
+
+# secrets
+.env
+.env.*
+!.env.example
+service_account*.json
+.venv/
+prospect-engine-*.json
+google-service-account*.json
+.DS_Store
