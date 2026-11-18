@@ -9,21 +9,17 @@ function page(title: string, message: string): Response {
   <title>${title}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1.5rem; color: #1a1a1a; text-align: center; }
-    .logo { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 2.5rem; }
+    /* The logo file is light grey on a transparent background, so the page is dark. */
+    body { font-family: system-ui, sans-serif; background: #0b0b0b; color: #f2f2f2; max-width: 32rem; margin: 0 auto; padding: 4rem 1.5rem; text-align: center; }
+    .logo { display: block; height: 56px; width: auto; margin: 0 auto 3rem; }
     h1 { font-size: 1.25rem; }
-    p { line-height: 1.5; }
+    p { line-height: 1.5; color: #cfcfcf; }
     .site { margin-top: 2rem; font-size: 0.9rem; }
-    .site a { color: inherit; }
-    @media (prefers-color-scheme: dark) {
-      body { background: #111; color: #f2f2f2; }
-    }
+    .site a { color: #f2f2f2; }
   </style>
 </head>
 <body>
-  <!-- To use an image logo: put the file in /public (e.g. unfocus-logo.png)
-       and replace the text below with <img src="/unfocus-logo.png" alt="UnFocus" height="48" /> -->
-  <div class="logo">UnFocus</div>
+  <img class="logo" src="/unfocus-logo.png" alt="UnFocus" />
   <h1>${title}</h1>
   <p>${message}</p>
   <p class="site"><a href="https://unfocus.com.au">unfocus.com.au</a></p>
@@ -66,5 +62,5 @@ export async function GET(request: Request) {
       )
   }
 
-  return page('You have been unsubscribed', "You won't receive any further emails from UnFocus. Sorry for the inconvenience.")
+  return page('You have been unsubscribed', "You won't receive any further emails from UnFocus.")
 }
