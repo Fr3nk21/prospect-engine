@@ -38,7 +38,7 @@ export default async function ContactDetailPage({
     supabase
       .from('contacts')
       .select(
-        'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, source, priority_score, score_breakdown, analysis, email_technical, email_warm, email_followup, followup_sent_at, last_contact_date,'
+                'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, followup_sent_at, source, priority_score, score_breakdown, analysis, email_technical, email_warm, email_followup'
       )
       .eq('id', id)
       .single(),
