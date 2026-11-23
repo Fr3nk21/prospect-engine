@@ -8,6 +8,7 @@ export const STATUSES = [
 ] as const
 export const CATEGORIES = ['High', 'Medium', 'Low'] as const
 export const PAGE_SIZES = [5, 10, 25, 50, 100] as const
+export const OVERDUE_DAYS = 5 // "Contacted" contacts with no follow-up yet count as overdue after this many days.
 export const SORT_COLUMNS = {
   name: 'Business',
   category: 'Opportunity',
@@ -27,6 +28,7 @@ export type ContactListItem = {
   is_new_venue: boolean
   status: string
   last_contact_date: string | null
+  followup_sent_at: string | null
   has_screenshots: boolean
   instagram_score: number | null  // total_score from score_breakdown, null if no analysis
 }
@@ -69,6 +71,7 @@ export type ContactDetail = {
   is_new_venue: boolean
   status: string
   last_contact_date: string | null
+  followup_sent_at: string | null
   source: string
   priority_score: number | null
   score_breakdown: ScoreBreakdown | null

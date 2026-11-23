@@ -3,7 +3,7 @@ import BackButton from '@/components/back-button'
 import EditableContactHeader from '@/components/editable-contact-header'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { CategoryTag, NewVenueBadge, Rating } from '@/components/contact-badges'
+import { CategoryTag, NewVenueBadge, FollowUpBadge, Rating } from '@/components/contact-badges'
 import StatusSelect from '@/components/status-select'
 import NoteForm from '@/components/note-form'
 import Timeline from '@/components/timeline'
@@ -38,7 +38,7 @@ export default async function ContactDetailPage({
     supabase
       .from('contacts')
       .select(
-        'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, source, priority_score, score_breakdown, analysis, email_technical, email_warm, email_followup'
+        'id, place_id, name, address, suburb, phone, website, email, instagram, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, source, priority_score, score_breakdown, analysis, email_technical, email_warm, email_followup, followup_sent_at, last_contact_date,'
       )
       .eq('id', id)
       .single(),
@@ -94,9 +94,10 @@ export default async function ContactDetailPage({
     updateContactFields={updateContactFields}
   />
 </div>
-        <div className="detail-badges">
+                <div className="detail-badges">
           <CategoryTag value={c.category} />
           {c.is_new_venue && <NewVenueBadge />}
+          {c.followup_sent_at && <FollowUpBadge />}
           <Rating value={c.rating} reviews={c.review_count} />
         </div>
       </header>

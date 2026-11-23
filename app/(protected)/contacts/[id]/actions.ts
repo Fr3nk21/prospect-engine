@@ -121,17 +121,29 @@ export async function sendEmail(
       inReplyTo: contact.gmail_message_id ?? undefined,
       contactId,
     })
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Could not send the email.' }
+    } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not send the email.'
+    if (/expired or revoked|invalid_grant/i.test(message)) {
+      return {
+        error:
+          'Gmail authorization expired. Open /api/auth/gmail/start, copy the new refresh token into GMAIL_REFRESH_TOKEN (Vercel env), then redeploy.',
+      }
+    }
+    return { error: message }
   }
 
   const emailVariant = variant.replace(/^email_/, '') as 'technical' | 'warm' | 'followup'
 
-  const statusUpdate: Record<string, string> = {
+  const statusUpdate: Record<string, string | null> = {
     gmail_thread_id: sent.threadId,
     gmail_message_id: sent.messageId,
+    last_contact_date: new Date().toISOString().slice(0, 10),
   }
-  if (contact.status === 'To contact') statusUpdate.status = 'Contacted'
+  if (contact.status === 'To contact') {
+    statusUpdate.status = 'Contacted'
+    statusUpdate.followup_sent_at = null
+  }
+  if (emailVariant === 'followup') statusUpdate.followup_sent_at = new Date().toISOString()
 
   await supabase.from('contacts').update(statusUpdate).eq('id', contactId)
 

@@ -6,7 +6,7 @@ import ContactsTable from '@/components/contacts-table'
 import ScrapePanel from '@/components/scrape-panel'
 import AddContactButton from '@/components/add-contact-button'
 import { addContact } from './actions'
-import { PAGE_SIZES, SORT_COLUMNS, type ContactListItem, type SortColumn } from '@/lib/contacts'
+import { OVERDUE_DAYS, PAGE_SIZES, SORT_COLUMNS, type ContactListItem, type SortColumn } from '@/lib/contacts'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,21 +36,26 @@ export default async function ContactsPage({
   const page = Math.max(0, Number(sp.page) || 0)
 
   const overdue = sp.overdue === '1'
-const overdueCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const overdueCutoff = new Date(Date.now() - OVERDUE_DAYS * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
 
   const supabase = await createClient()
 
   let query = supabase
     .from('contacts')
     .select(
-      'id, name, suburb, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, score_breakdown',
+            'id, name, suburb, business_type, rating, review_count, category, is_new_venue, status, last_contact_date, followup_sent_at, score_breakdown',
       { count: 'exact' }
     )
 
   if (q) query = query.ilike('name', `%${q}%`)
   if (category !== 'All') query = query.eq('category', category)
     if (overdue) {
-    query = query.eq('status', 'Contacted').lte('last_contact_date', overdueCutoff)
+    query = query
+      .eq('status', 'Contacted')
+      .is('followup_sent_at', null)
+      .lte('last_contact_date', overdueCutoff)
   } else if (status !== 'All') {
     query = query.eq('status', status)
   }
@@ -83,6 +88,7 @@ const overdueCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString
       .from('contacts')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'Contacted')
+      .is('followup_sent_at', null)
       .lte('last_contact_date', overdueCutoff),
     supabase.from('contacts').select('business_type').not('business_type', 'is', null),
     supabase.from('contacts').select('suburb').not('suburb', 'is', null),
@@ -117,6 +123,7 @@ const overdueCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString
       is_new_venue: c.is_new_venue as boolean,
       status: c.status as string,
       last_contact_date: c.last_contact_date as string | null,
+      followup_sent_at: c.followup_sent_at as string | null,
       has_screenshots: contactsWithScreenshots.has(id),
       instagram_score: sb?.total_score ?? null,
     }
@@ -165,7 +172,7 @@ const overdueCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString
                             <span className="dim">
                 {' · '}
                 <Link href={hrefWith({ overdue: overdue ? null : '1', page: null })}>
-                  {overdue ? '✓ ' : ''}{overdueCount ?? 0} contacted 7+ days ago
+                  {overdue ? '✓ ' : ''}{overdueCount ?? 0} contacted {OVERDUE_DAYS}+ days ago
                 </Link>
               </span>
             </div>

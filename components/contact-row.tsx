@@ -1,6 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { CategoryTag, NewVenueBadge, StatusDot, Rating } from '@/components/contact-badges'
+import { CategoryTag, NewVenueBadge, StatusDot, FollowUpBadge } from '@/components/contact-badges'
 import type { ContactListItem } from '@/lib/contacts'
 
 export default function ContactRow({
@@ -56,6 +56,7 @@ export default function ContactRow({
       </td>
       <td>
         <StatusDot value={contact.status} />
+        {contact.followup_sent_at && <FollowUpBadge />}
       </td>
       <td className="right mono dim">{contact.last_contact_date ?? '—'}</td>
     </tr>

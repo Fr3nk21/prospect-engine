@@ -9,20 +9,13 @@ function page(title: string, message: string): Response {
   <title>${title}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    /* The logo file is light grey on a transparent background, so the page is dark. */
-    body { font-family: system-ui, sans-serif; background: #0b0b0b; color: #f2f2f2; max-width: 32rem; margin: 0 auto; padding: 4rem 1.5rem; text-align: center; }
-    .logo { display: block; height: 56px; width: auto; margin: 0 auto 3rem; }
+    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1.5rem; color: #1a1a1a; }
     h1 { font-size: 1.25rem; }
-    p { line-height: 1.5; color: #cfcfcf; }
-    .site { margin-top: 2rem; font-size: 0.9rem; }
-    .site a { color: #f2f2f2; }
   </style>
 </head>
 <body>
-  <img class="logo" src="/unfocus-logo.png" alt="UnFocus" />
   <h1>${title}</h1>
   <p>${message}</p>
-  <p class="site"><a href="https://unfocus.com.au">unfocus.com.au</a></p>
 </body>
 </html>`
   return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })

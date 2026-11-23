@@ -41,6 +41,14 @@ export function NewVenueBadge() {
   )
 }
 
+export function FollowUpBadge() {
+  return (
+    <span className="cat-tag" style={{ color: '#9B7ED6', borderColor: '#9B7ED655', background: '#9B7ED61A' }}>
+      Follow-up sent
+    </span>
+  )
+}
+
 export function Rating({ value, reviews }: { value: number | null; reviews: number | null }) {
   if (value == null) return <span className="mono rating dim">—</span>
   return (
